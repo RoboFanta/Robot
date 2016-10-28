@@ -5,6 +5,7 @@ Just us trying to build a robot
 * This is the plan currently:
   - Ilias lesen
   - Kabel besorgen (+~5)
+  - do stuff ... !
 
 
 Requirenments:
