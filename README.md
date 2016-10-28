@@ -38,4 +38,14 @@ Just us trying to build a robot
 * Verbotenes
   - Eigene Motoren für Antrieb
 
+
+## Tasks
+- Christian  : organisatorisches
+- Victor     : Kümmert sich um Arduino
+- Felix      : Konkretisiert software-ideen
+- Paul       : sucht + Bestellt sensoren
+
+
 Next date of action: unknown (as of yet)
+
+
