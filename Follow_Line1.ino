@@ -5,13 +5,14 @@
 #define OUT_A 5
 #define OUT_B 6
 #define outpin1 5
-#define outpin12 18
+#define outpin12 7
 #define outpin2 6
-#define outpin22 19
+#define outpin22 8
 
-#define inpin1 7
-#define inpin2 8
-#define inpin3 9
+
+#define inpin1 9
+#define inpin2 10
+#define inpin3 11
 
 int tmp = 3;
 
@@ -27,7 +28,7 @@ void setup() {
 
 void MotorUse(int pin, int speed, bool reverse){
   digitalWrite(pin + 13, reverse);
-  analogWrite(pin,speed);
+  analogWrite(pin, speed);
 }
 
 #define OnFwd(pin,speed) MotorUse(pin,speed*256.0/100.0, false)
