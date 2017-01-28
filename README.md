@@ -50,11 +50,11 @@ Next date of action: unknown (as of yet)
 
 
 ## A few (maybe) important links:
-http://stackabuse.com/speeding-up-arduino/
-https://create.arduino.cc/projecthub/reanimationxp/how-to-multithread-an-arduino-protothreading-tutorial-dd2c37
-http://playground.arduino.cc/Main/MPU-6050#easy
-http://playground.arduino.cc/Main/MPU-6050#short
-https://diyhacking.com/arduino-mpu-6050-imu-sensor-tutorial/
-https://www.cdiweb.com/datasheets/invensense/PS-MPU-6000A.pdf
-https://store.invensense.com/Datasheets/invensense/RM-MPU-6000A.pdf
+- http://stackabuse.com/speeding-up-arduino/
+- https://create.arduino.cc/projecthub/reanimationxp/how-to-multithread-an-arduino-protothreading-tutorial-dd2c37
+- http://playground.arduino.cc/Main/MPU-6050#easy
+- http://playground.arduino.cc/Main/MPU-6050#short
+- https://diyhacking.com/arduino-mpu-6050-imu-sensor-tutorial/
+- https://www.cdiweb.com/datasheets/invensense/PS-MPU-6000A.pdf
+- https://store.invensense.com/Datasheets/invensense/RM-MPU-6000A.pdf
 
