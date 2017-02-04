@@ -36,10 +36,11 @@ Only This File is Licensed under CC 2.5
 
 
 //Variables for GYRO_GAIN and ACCEL_GAIN
-#define ACCEL_GAIN 18.0 //
-//#define ACCEL_GAIN 17.0 //
+//#define ACCEL_GAIN 18.0 //
+#define ACCEL_GAIN 17.0 //
 //#define GYRO_GAIN 6.0   //
 #define GYRO_GAIN 5.0   //
+#define DEG_TO_RAD 0.017453
 
 float ti_constant = 3;
 
@@ -55,7 +56,7 @@ float aa_constant = 0.005; //this means 0.5% of the accelerometer reading is fed
 // #define DEBUG_ENABLE_PRINTING 0 //normal
 #define DEBUG_DISABLE_MOTORS 0 //normal
 
-//#define DEBUG_FORCE_DEADMAN_SWITCH 1 //DEBUG ONLY...Force on for debug only.  Not for operation!!
+// #define DEBUG_FORCE_DEADMAN_SWITCH 1 //DEBUG ONLY...Force on for debug only.  Not for operation!!
 #define DEBUG_ENABLE_PRINTING 1 //DEBUG ONLY... turn off for real operation!
 // #define DEBUG_DISABLE_MOTORS 1 //DEBUG ONLY... turn off for real operation!
 //Debug
@@ -180,7 +181,7 @@ float balance_torque;
 float softstart;
 
 float Balance_point;
-float balancetrim = 0;
+float balancetrim = -5;
 
 int balancelForward;
 int balancelBackward;
@@ -227,8 +228,8 @@ void setup() { // run once, when the sketch starts
   mpu.setZAccelOffset(900); // 1688 factory default for  test chip
 */
   mpu.setXGyroOffset(220);
-  mpu.setYGyroOffset(220);
-  mpu.setZGyroOffset(220);
+  mpu.setYGyroOffset(76);
+  mpu.setZGyroOffset(-85);
   mpu.setZAccelOffset(1788);
 
   // make sure it worked (returns 0 if so)
@@ -426,13 +427,13 @@ void read_accel_gyro()  {     //digital accel/gyro is read here
       angle_X = ypr[0]* RAD_TO_DEG;             // not used...0 is center of gravity offset
       angle_Y = ypr[1]* RAD_TO_DEG;             // Accel for Tilt, 0 is center of gravity offset
       angle_Z = ypr[2]* RAD_TO_DEG;             // not used...0 is center of gravity offset
-      angular_rate_X = ((double)gyro[0]/131.0); // Gyro for steering, in degs/sec.
-      angular_rate_Y = ((double)gyro[1]/131.0); // Gyro for tilt, in degs/sec.
-      angular_rate_Z = ((double)gyro[2]/131.0); // Gyro for X, in degs/sec.
+      angular_rate_X = ((double)gyro[0]/131.0) * RAD_TO_DEG; // Gyro for steering, in degs/sec.
+      angular_rate_Y = ((double)gyro[1]/131.0) * RAD_TO_DEG; // Gyro for tilt, in degs/sec.
+      angular_rate_Z = ((double)gyro[2]/131.0) * RAD_TO_DEG; // Gyro for X, in degs/sec.
 
-      angular_rate_X = angular_rate_X * RAD_TO_DEG; // Gyro for steering, in degs/sec.
-      angular_rate_Y = angular_rate_Y * RAD_TO_DEG; // Gyro for tilt,
-      angular_rate_Z = angular_rate_Z * RAD_TO_DEG; // Gyro for X
+//      angular_rate_X = angular_rate_X * RAD_TO_DEG; // Gyro for steering, in degs/sec.
+//      angular_rate_Y = angular_rate_Y * RAD_TO_DEG; // Gyro for tilt,
+//      angular_rate_Z = angular_rate_Z * RAD_TO_DEG; // Gyro for X
 
     } //end else if (mpuIntStatus & 0x02)
 } //end of read_accel_gyro()
@@ -514,14 +515,15 @@ void do_calculations()  {     //do_calculations here
   else { //(SteerLeftPin == 0 || SteerRightPin == 0) We DO want to steer
 
     //note: SteerValue of 512 is straight ahead
+    SteerValue = 512;
 
     if (SteerLeftPin == 0) {
-      SteerValue = 612; //add some some right turn power. Experimentally determined.
+      SteerValue += 100; //add some some right turn power. Experimentally determined.
     }
 
     //steer the other way
     if (SteerRightPin == 0) {
-      SteerValue = 412; //add some some left turn power. Experimentally determined.
+      SteerValue -= 100; //add some some left turn power. Experimentally determined.
     }
 
     SteerCorrect = 0;
@@ -538,8 +540,7 @@ void do_calculations()  {     //do_calculations here
   x_accdeg = constrain(x_accdeg, -72, 72);   //put in range.
 
   //For digital gyro here
-  gangleratedeg = (float)(angular_rate_Y - initial_angular_rate_Y); // IDH
-  gangleratedeg = constrain(gangleratedeg, -110, 110);
+  gangleratedeg = constrain((float)(angular_rate_Y - initial_angular_rate_Y), -110, 110);
 
   //Key calculations. Gyro measures rate of tilt gangleratedeg in degrees. We know time since last measurement is cycle_time (10ms) so can work out much we have tipped over since last measurement
   //What is ti variable? Strictly it should be 1. However if you tilt board, then it moves along at an angle, then SLOWLY comes back to level point as it is moving along
@@ -550,10 +551,10 @@ void do_calculations()  {     //do_calculations here
 
   gyroangle_dt = (float) ti_constant * cycle_time * gangleratedeg; //e.g  = 3*0.01*gyro_reading
 
-  gangleraterads = (float) gangleratedeg * 0.017453; //convert to radians - just a scaling issue from history
+  gangleraterads = (float) gangleratedeg * DEG_TO_RAD; //convert to radians - just a scaling issue from history
 
   //Complementary Filter.
-  angle = (float) ((1-aa_constant) * (angle + gyroangle_dt)) + (aa_constant * x_accdeg);//aa=(0.005) allows us to feed a bit (0.5%) of the accelerometer data into the angle calculation
+  angle = (float) ((1-aa_constant) * (angle + gyroangle_dt)) + (aa_constant * x_accdeg); //aa=(0.005) allows us to feed a bit (0.5%) of the accelerometer data into the angle calculation
   //so it slowly corrects the gyro (which drifts slowly with time). Accel sensitive to vibration though so aa does not want to be too large.
   //this is why these boards do not work if an accel only is used. We use gyro to do short term tilt measurements because it is insensitive to vibration
 
@@ -562,12 +563,12 @@ void do_calculations()  {     //do_calculations here
   //α = τ/(τ + Δt)   and   (Gyroscope Angle) = (Last Measured Filtered Angle) + ω×Δt
   //Δt = sampling rate, τ = time constant greater than timescale of typical accelerometer noise
 
-  anglerads = (float) angle * 0.017453; //converting to radians again a historic scaling issue from past software
+  anglerads = (float) angle * DEG_TO_RAD; //converting to radians again a historic scaling issue from past software
 
   balance_torque = (float) (ACCEL_GAIN * anglerads) +  //from accelerometer
     (GYRO_GAIN * gangleraterads); //from Gyro
 
-  //balance torque is motor control variable we would use even if we just ahd one motor. It is what is required to make the thing balance only.
+  //balance torque is motor control variable we would use even if we just had one motor. It is what is required to make the thing balance only.
   //the values of 4.5 and 0.5 came from Trevor Blackwell's segway clone experiments and were derived by good old trial and error
   //I have also found them to be about right
   //We set the torque proportionally to the actual angle of tilt (anglerads), and also proportional to the RATE of tipping over (ganglerate rads)
@@ -582,7 +583,7 @@ void do_calculations()  {     //do_calculations here
   //tilted for long eneough, it will eventually go up the slope (so long as motors powerfull enough and motor controller powerful enough)
   //Why the 0.999 value? I got this from the SeWii project code - thanks!
   //If you have built up a large cur_speed value and you tilt it back to come to a standstill, you will have to keep it tilted back even when you have come to rest
-  //i.e. board will stop moving OK but will now not be level as you are tiliting it back other way to counteract this large cur_speed value
+  //i.e. board will stop moving OK but will now not be level as you are tilting it back other way to counteract this large cur_speed value
   //The 0.999 means that if you bring board level after a long period tilted forwards, the cur_speed value magically decays away to nothing and your board
   //is now not only stationary but also level!
 
@@ -591,15 +592,13 @@ void do_calculations()  {     //do_calculations here
 } //end do_calculations
 
 
-////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////
 void set_motor()   {
   ////////////////////////////////////////////////////////////////////////////////
   unsigned char cSpeedVal_Motor1 = 0;
   unsigned char cSpeedVal_Motor2 = 0;
 
-  level = level * 20; //changes it to a scale of about -100 to +100 works ..OK
-  if (level < -100) {level = -100;}
-  if (level > 100) {level = 100;}
+  level = constrain(level * 20, -100, 100); //changes it to a scale of about -100 to +100 works ..OK
 
   Steer = (float) SteerValue - SteerCorrect;  //at this point is on the 0-1023 scale
   //SteerValue is either 512 for dead ahead or bigger/smaller if you are pressing steering switch left or right
@@ -611,8 +610,8 @@ void set_motor()   {
   Motor1percent = (signed char) level + Steer;
   Motor2percent = (signed char) level - Steer;
 
-  Motor1percent = constrain(Motor1percent, -60, 60);
-  Motor2percent = constrain(Motor2percent, -60, 60);
+  Motor1percent = constrain(Motor1percent, -100, 100);
+  Motor2percent = constrain(Motor2percent, -100, 100);
 
   //debug:
   if (DEBUG_FORCE_DEADMAN_SWITCH == 1) {
@@ -671,33 +670,37 @@ void serialOut_timing(){ //print out to serial port when enabled.
     //    Serial.print(fifoCount);
     //    Serial.print(" uPIntStat: ");
     //    Serial.print(mpuIntStatus);
-    Serial.print(" ang_X: ");
-    Serial.print(angle_X);
-    Serial.print(" ang_Y: ");
+    //    Serial.print(" ang_X: ");
+    //    Serial.print(angle_X);
+    Serial.print("  ang_Y: ");
     Serial.print(angle_Y);
-    Serial.print(" ang_Z: ");
-    Serial.print(angle_Z);
-    Serial.print(" ang_rate_X: ");
-    Serial.print(angular_rate_X);
-    Serial.print(" ang_rate_Y: ");
+    //    Serial.print(" ang_Z: ");
+    //    Serial.print(angle_Z);
+    //    Serial.print(" ang_rate_X: ");
+    //    Serial.print(angular_rate_X);
+    Serial.print("  ang_rate_Y: ");
     Serial.print(angular_rate_Y);
-    Serial.print(" ang_rate_Z: ");
-    Serial.print(angular_rate_Z);
+    //    Serial.print(" ang_rate_Z: ");
+    //    Serial.print(angular_rate_Z);
     Serial.print("   Mot1%: ");
     Serial.print(Motor1percent);
-    Serial.print(" Mot2%: ");
+    Serial.print("  Mot2%: ");
     Serial.print(Motor2percent);
-    //    Serial.print(" x_accdeg: ");
-    //    Serial.print(x_accdeg);
-    //    Serial.print(" gangratedeg: ");
-    //    Serial.print(gangleratedeg);
-    //    Serial.print(" gyroangle_dt: ");
-    //    Serial.print(gyroangle_dt);
-    //    Serial.print(" cur_speed: ");
-    //    Serial.print(cur_speed);
-    //    Serial.print(" level: ");
-    //    Serial.println(level);
-    Serial.println("  ");//newline
+    Serial.print("  x_accdeg: ");
+    Serial.print(x_accdeg);
+    Serial.print("  gangleratedeg: ");
+    Serial.print(gangleratedeg);
+    Serial.print("  balancetrim: ");
+    Serial.print(balancetrim);
+    Serial.print("  SG_filter_result: ");
+    Serial.print(SG_filter_result);
+    Serial.print("  gyroangle_dt: ");
+    Serial.print(gyroangle_dt);
+    Serial.print("  cur_speed: ");
+    Serial.print(cur_speed);
+    Serial.print("  level: ");
+    Serial.println(level);
+    Serial.println("");//newline
   }
 }//end void serialOut_timing()
 
