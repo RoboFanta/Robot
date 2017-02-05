@@ -1,12 +1,15 @@
 
-// Hartway_digital
+// Final Follower - Final Code for following a line for up to 2 Arduinos,
+// One of which may be controlling two motors based on a Gyro as well
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Segway Clone Arduino Uno code using an MPU6050 on a GY-521 digital IMU board
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 // Last Modified:
-// 2017-01-28     For Uni Project.     Felix Karg
+// 2017-02-04     For Uni Project.     Felix Karg
 
 
 /*
@@ -27,6 +30,7 @@ Modified by Felix Karg <felix.karg@uranus.uni-freiburg.de>
 for trying a Segway-style robot at the SDP Project.
 
 Only Files including this line are Licensed under CC 2.5
+(This includes this file as well as the 'more' original Code included as well, and other files derived from it.)
 */
 
 #include <Wire.h>
@@ -56,28 +60,28 @@ float aa_constant = 0.005; //this means 0.5% of the accelerometer reading is fed
 #define DEBUG_DISABLE_MOTORS 0 //normal
 
 // #define DEBUG_FORCE_DEADMAN_SWITCH 1 //DEBUG ONLY...Force on for debug only.  Not for operation!!
-#define DEBUG_ENABLE_PRINTING 1 //DEBUG ONLY... turn off for real operation!
+#define DEBUG_ENABLE_PRINTING 1 //DEBUG ONLY... turn off for real operation! - we might use it however.
 // #define DEBUG_DISABLE_MOTORS 1 //DEBUG ONLY... turn off for real operation!
 //Debug
 
-//note MPU6050 connections:
-//SCL = A5
-//SDA = A4
-//INT   = Digital 2 on arduino Uno
-//Vcc  = 5V
-//Gnd  = Gnd
+// note MPU6050 connections:
+// SCL = A5  (I2C)
+// SDA = A4  (I2C)
+// INT = Digital 2 on arduino Uno, Nano, ..
+// Vcc = 5V
+// Gnd = Gnd
 
 #define MPU_INT 0 //is on pin 2
 
 MPU6050 mpu;   // AD0 low = 0x68
 
 // MPU control/status vars
-bool dmpReady = false;  // set true if DMP init was successful
-uint8_t mpuIntStatus;   // holds actual interrupt status byte from MPU
-uint8_t devStatus;      // return status after each device operation (0 = success, !0 = error)
-uint16_t packetSize;    // expected DMP packet size (default is 42 bytes)
-uint16_t fifoCount;     // count of all bytes currently in FIFO
-uint8_t fifoBuffer[64]; // FIFO storage buffer
+bool     dmpReady = false;   // set true if DMP init was successful
+uint8_t  mpuIntStatus;       // holds actual interrupt status byte from MPU
+uint8_t  devStatus;          // return status after each device operation (0 = success, !0 = error)
+uint16_t packetSize;         // expected DMP packet size (default is 41 bytes)
+uint16_t fifoCount;          // count of all bytes currently in FIFO
+uint8_t  fifoBuffer[64];     // FIFO storage buffer
 
 // orientation/motion vars
 Quaternion q;           // [w, x, y, z]         quaternion container
@@ -100,16 +104,40 @@ int deadmanButtonPin    = 4;  // deadman button is digital input pin
 int balanceForwardPin   = 8;  //if digital pin  is 5V then reduce balancepoint variable. Allows manual fine tune of the ideal target balance point
 int balanceBackwardPin  = 7;  //if digital pin  is 5V then increase balancepoint variable. Allows manual fine tune of the ideal target balance point
 
-/* NO STEERING as of yet. might be realized at pins D7 + D8 or A6 + A7 or D12 + D13 at some point, but not yet.   */
-int steeringLeftPin     = 9;  //digital pin Used to steer
-int steeringRightPin    = 12;  //digital pin Used to steer the other way.
+int8_t percent = 0;
+int8_t direction = 0;
+/*  -3 = LEEFT!!
+    -2 = more left
+    -1 = slight left
+     0 = straight ahead
+     1 = slight right
+     2 = more right
+     3 = To the RIIIGHT!!
+*/
+
+// Done: find way of communcating between the two arduinos:
+//  There are several possibilities:
+//  - Custom Protocal on two or more Analog/Digital Pins    (A lot to code, maybe enormeously inefficient)
+//  - ShiftIn/ShiftOut  Slower Custom and direct data and clock lines ...
+//  - Comm over I2C     (Nice higher-Level interface, already set up for us)
+//  - Comm over Serial  (Pretty high-level easy (!!) to use Interface, 
+//                       Not getting in the way with other communication)
+//
+// We would need to specifically set up the I2C communication, for several devices,
+// It's getting slightly more complicated, shouldn't be that hard though.
+//
+// Decision: I2C. Serial is not exactly available if we still want to get debug info
+// when connected to a pc. Using two custom Analog pins isn't really a solution at all either.
+//
+// Communicate Deadpin from other Arduino as well? Solution for now:
+// Let debug flag be set in ... final version?
 
 
 /////////////////////////////////////////////////////////////////////////////////
 //reserved pin      = 2;  //accel/gyro IMU interrupt 0 pin input               //
 //reserved pin      = 13  //output to saber serial motor controller            //
-//reserved pin      = A4 //MPU6050 SDA                                         //
-//reserved pin      = A5 //MPU6050 SCL                                         //
+//reserved pin      = A4  //MPU6049 SDA  (I2C)                                 //
+//reserved pin      = A5  //MPU6050 SCL  (I2C)                                 //
 /////////////////////////////////////////////////////////////////////////////////
 // Motor Pins:                                                                 //
 // Forward  =  D5  / D6                                                        //
@@ -124,8 +152,9 @@ int steeringRightPin    = 12;  //digital pin Used to steer the other way.
 #define Off(pin) MotorUse(pin, 0, false)
 
 
-#define OUT_A 5
-#define OUT_B 6
+// Defining the Control pins for the motors.
+#define OUT_A motor1forward
+#define OUT_B motor2forward
 int motor1forward = 5;
 int motor2forward = 6;
 int motor1reverse = 10;
@@ -133,9 +162,9 @@ int motor2reverse = 11;
 
 
 float cur_speed;
-float cycle_time = 0.01; //seconds per cycle - currently 10 milliseconds per loop of the program.
+float cycle_time = 0.01; // seconds per cycle - currently 10 milliseconds per loop of the program.
                          // Need to know it as gyro measures rate of turning. Needs to know time between each measurement
-                         //so it can then work out angle it has turned through since the last measurement - so it can know angle of tilt from vertical.
+                         // so it can then work out angle it has turned through since the last measurement - so it can know angle of tilt from vertical.
 
 int STD_LOOP_TIME = 9; //9= 10mS loop time // code that keeps loop time at 10ms per cycle of main program loop
 int lastLoopTime = STD_LOOP_TIME;
@@ -152,24 +181,22 @@ float x_acc;
 float SG_filter_result;
 float x_accdeg;
 
-float initial_angular_rate_Y = 0;
+float initial_angular_rate_Y     = 0;
 float initial_angular_rate_Y_sum = 0;
-float initial_angular_rate_X = 0;
+float initial_angular_rate_X     = 0;
 float initial_angular_rate_X_sum = 0;
 
 float gangleratedeg;
 float gangleratedeg2;
 
 float gangleraterads;
-int   SteerLeftPin;
-int   SteerRightPin;
 int   DeadManPin;
 
 //add for deadman debounce
-int DeadManPin_temp = 1;      //this variable is from the digitalRead
-int DeadManPin_temp_old = 1;  //this variable is delayed from the digitalRead
-long lastDebounceTime = 0;    // the last time the output pin was toggled
-long debounceDelay = 50;      // the debounce delay in mSecs
+int  DeadManPin_temp     = 1;      // this variable is from the digitalRead
+int  DeadManPin_temp_old = 1;      // this variable is delayed from the digitalRead
+long lastDebounceTime    = 0;      // the last time the output pin was toggled
+long debounceDelay       = 50;     // the debounce delay in mSecs
 
 float overallgain;
 
@@ -177,10 +204,9 @@ float gyroangle_dt;
 float angle;
 float anglerads;
 float balance_torque;
-float softstart;
 
-float Balance_point;
-float balancetrim = -5;
+float balancetrim = 0;
+float forward = 0;
 
 int balancelForward;
 int balancelBackward;
@@ -277,16 +303,9 @@ void setup() { // run once, when the sketch starts
     digitalWrite(LED_BUILTIN, LOW);
 
     // digital inputs
-    pinMode(deadmanButtonPin, INPUT);
-    digitalWrite(deadmanButtonPin, HIGH);      // turn on pullup resistors
-    pinMode(balanceForwardPin, INPUT);
-    digitalWrite(balanceForwardPin, HIGH);     // turn on pullup resistors
-    pinMode(balanceBackwardPin, INPUT);
-    digitalWrite(balanceBackwardPin, HIGH);    // turn on pullup resistors
-    pinMode(steeringLeftPin, INPUT);
-    digitalWrite(steeringLeftPin, HIGH);       // turn on pullup resistors
-    pinMode(steeringRightPin, INPUT);
-    digitalWrite(steeringRightPin, HIGH);      // turn on pullup resistors
+    pinMode(deadmanButtonPin, INPUT_PULLUP);      // turn on pullup resistors
+    pinMode(balanceForwardPin, INPUT_PULLUP);     // turn on pullup resistors
+    pinMode(balanceBackwardPin, INPUT_PULLUP);    // turn on pullup resistors
 
     //Delay 2 seconds to let MPU6050 self calibrate before reading gyros
     delay (2000); // 2 seconds
@@ -302,6 +321,11 @@ void setup() { // run once, when the sketch starts
     }
     initial_angular_rate_Y = (float) initial_angular_rate_Y_sum/7;  //initial front/back tilt gyro
     initial_angular_rate_X = (float) initial_angular_rate_X_sum/7;  //initial left/right steer gyro
+
+    Wire.beginTransmission(8);
+    Wire.write(1);
+    Wire.endTransmission();
+    
 
 } //end of setup
 
@@ -333,6 +357,8 @@ void loop ()   {
     read_accel_gyro(); // read accel/gyro
 
     do_calculations(); //do math
+
+    get_direction(); // reading direction advision from other arduino
 
     set_motor(); //set motors up
 
@@ -438,12 +464,21 @@ void read_accel_gyro()  {     //digital accel/gyro is read here
 } //end of read_accel_gyro()
 
 
-////////////////////////////////////////////////////////////////////////////////
-void do_calculations()  {     //do_calculations here
-  ////////////////////////////////////////////////////////////////////////////////
 
-  SteerLeftPin = digitalRead(steeringLeftPin);
-  SteerRightPin = digitalRead(steeringRightPin);
+////////////////////////////////////////////////////////////////////////////////
+void get_direction() {
+  //////////////////////////////////////////////////////////////////////////////
+
+  Wire.requestFrom(8, 2);
+  direction = Wire.read();
+  percent = Wire.read();
+
+} // end of get_directions
+
+
+////////////////////////////////////////////////////////////////////////////////
+void do_calculations()  {     // do_calculations here
+  //////////////////////////////////////////////////////////////////////////////
 
   //Start Debounce Deadman button
   DeadManPin_temp = digitalRead(deadmanButtonPin);
@@ -475,6 +510,7 @@ void do_calculations()  {     //do_calculations here
   if (balancelBackward == 0) balancetrim = balancetrim + 0.04; //same again in other direction
   balancetrim = constrain(balancetrim, -30, 30);   //stops you going too far with this
 
+
   // Savitsky Golay filter for accelerometer readings. It is better than a simple rolling average which is always out of date.
   // SG filter looks at trend of last few readings, projects a curve into the future, then takes mean of whole lot, giving you a more "current" value - Neat!
   // Lots of theory on this on net.
@@ -496,7 +532,11 @@ void do_calculations()  {     //do_calculations here
   //Used to adjust steering from drift
   gangleratedeg2 = angular_rate_X - initial_angular_rate_X;  //IDH subtract curent value from inital value to get delta.
 
-  if (SteerLeftPin == 1 && SteerRightPin == 1){ // NO steering wanted. Use second gyro to maintain a (roughly) straight line heading (it will drift a bit).
+  //note: SteerValue of 512 is straight ahead
+  SteerValue = 512;
+
+  if (direction != 0) { 
+    // NO steering wanted. Use second gyro to maintain a (roughly) straight line heading (it will drift a bit).
 
     SteerCorrect = 0; //blocks the direction stabiliser unless rate of turn exceeds -10 or +10 degrees per sec
     if (gangleratedeg2 > 10 || gangleratedeg2 < -10) {   //resists turning if turn rate exceeds 10deg per sec
@@ -509,21 +549,18 @@ void do_calculations()  {     //do_calculations here
       //comes to standstill it spins round and you can fall off. This is original reason I built in this feature.
       //if motors have same friction you will not notice it so much.
     }
-    SteerValue = 512;
-  }
-  else { //(SteerLeftPin == 0 || SteerRightPin == 0) We DO want to steer
 
-    //note: SteerValue of 512 is straight ahead
-    SteerValue = 512;
+  } else { //(direction != 0) We DO want to steer
 
-    if (SteerLeftPin == 0) {
-      SteerValue += 100; //add some some right turn power. Experimentally determined.
-    }
-
-    //steer the other way
-    if (SteerRightPin == 0) {
-      SteerValue -= 100; //add some some left turn power. Experimentally determined.
-    }
+    SteerValue += 50 * direction;  // add some some turn power. calculated from other arduino.
+    /*  -3 = LEEFT!!
+        -2 = more left
+        -1 = slight left
+         0 = straight ahead
+         1 = slight right
+         2 = more right
+         3 = To the RIIIGHT!!
+    */
 
     SteerCorrect = 0;
   }
@@ -535,7 +572,10 @@ void do_calculations()  {     //do_calculations here
 
   // Balancetrim is front/back balance tip adjustment from switch
   // Sensor tilt number below is Determined experimentally. Bigger is more tilted forward.  It needs to change if you adjust ANGLE_GAIN.
-  x_accdeg = (float)((SG_filter_result - (80 + balancetrim)) * (1.0));
+
+//  forward = map(percent, -100, 100, -5, 5);  // does it actually do what it should?
+  forward = percent / 20;
+  x_accdeg = (float)((SG_filter_result - (80 + balancetrim + forward)) * (1.0));
   x_accdeg = constrain(x_accdeg, -72, 72);   //put in range.
 
   //For digital gyro here
@@ -710,4 +750,6 @@ void MotorUse(int pin, int speed, bool reverse){
   analogWrite(pin, speed * reverse);
   analogWrite(pin + 5, speed * (not reverse));
 }
+
+
 
