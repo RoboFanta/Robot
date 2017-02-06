@@ -120,7 +120,7 @@ int8_t direction = 0;
 //  - Custom Protocal on two or more Analog/Digital Pins    (A lot to code, maybe enormeously inefficient)
 //  - ShiftIn/ShiftOut  Slower Custom and direct data and clock lines ...
 //  - Comm over I2C     (Nice higher-Level interface, already set up for us)
-//  - Comm over Serial  (Pretty high-level easy (!!) to use Interface, 
+//  - Comm over Serial  (Pretty high-level easy (!!) to use Interface,
 //                       Not getting in the way with other communication)
 //
 // We would need to specifically set up the I2C communication, for several devices,
@@ -247,15 +247,15 @@ void setup() { // run once, when the sketch starts
 
 /*
   // supply your own gyro offsets here, scaled for min sensitivity
-  mpu.setXGyroOffset(10);
-  mpu.setYGyroOffset(7);
-  mpu.setZGyroOffset(14);
-  mpu.setZAccelOffset(900); // 1688 factory default for  test chip
+  Your offsets:  -404  -914  1411  281 74  20                 (Der mit schrägen Pins)
+  Your offsets: -1062 -4557 1144  89  41  -9                  (Der mit geraden Pins)
+  Data is printed as: acelX acelY acelZ giroX giroY giroZ
+
 */
-  mpu.setXGyroOffset(220);
-  mpu.setYGyroOffset(76);
-  mpu.setZGyroOffset(-85);
-  mpu.setZAccelOffset(1788);
+  mpu.setXGyroOffset(281);
+  mpu.setYGyroOffset(74);
+  mpu.setZGyroOffset(20);
+  mpu.setZAccelOffset(1411);
 
   // make sure it worked (returns 0 if so)
   if (devStatus == 0)
@@ -325,7 +325,7 @@ void setup() { // run once, when the sketch starts
     Wire.beginTransmission(8);
     Wire.write(1);
     Wire.endTransmission();
-    
+
 
 } //end of setup
 
@@ -535,7 +535,7 @@ void do_calculations()  {     // do_calculations here
   //note: SteerValue of 512 is straight ahead
   SteerValue = 512;
 
-  if (direction != 0) { 
+  if (direction != 0) {
     // NO steering wanted. Use second gyro to maintain a (roughly) straight line heading (it will drift a bit).
 
     SteerCorrect = 0; //blocks the direction stabiliser unless rate of turn exceeds -10 or +10 degrees per sec
