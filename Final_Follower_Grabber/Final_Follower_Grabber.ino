@@ -3,6 +3,27 @@
 // One of which may be controlling two motors based on a Gyro.
 
 
+// Last Modified:
+// 2017-02-06     For Uni Project.     Felix Karg
+
+
+/*
+This Arduino code will take inputs from a few light- and an ultrasonic sensor,
+and communicates with a second arduino in taking up a ball, navigating,
+as in following a line, and dropping the ball at the designated point.
+
+
+Written mainly by   Felix Karg     <felix.karg@uranus.uni-freiburg.de>
+improvements from   Paul Boeninger <>
+              and   Victor Maier   <>
+
+For trying a Segway-style robot at the SDP Project, University of Freiburg, WS2016/17.
+
+Only Files including this line are Licensed under CC 2.5
+(Available here: https://creativecommons.org/licenses/by/2.5/legalcode )
+*/
+
+
 
 #include <Wire.h>
 #include "I2Cdev.h"
@@ -73,6 +94,7 @@ bool readLight = false;
 
 // motor 'state'
 int tmp;
+int8_t finished = 0;
 int8_t percent = 0;
 int8_t direction = 0;
 /*  -3 = LEEFT!!
@@ -84,6 +106,9 @@ int8_t direction = 0;
      3 = To the RIIIGHT!!
 */
 
+// grabbing motor:
+int grabPin1 = 5;
+int grabPin2 = 6;
 
 /* // Only when Motor control is going happen on this Arduino after all.
 // For controlling the Motor
@@ -131,6 +156,7 @@ void return_values() {
   /////////////////////////////////////////////////////////////////////////////////////////////////
   Wire.write(direction);
   Wire.write(percent);
+  Wire.write(finished);
 }
 
 void recv_event(int num_bytes) {
@@ -141,13 +167,13 @@ void recv_event(int num_bytes) {
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-void loop() {
+void loop() {         // Main Control loop
   /////////////////////////////////////////////////////////////////////////////////////////////////
 
   lastLoopUsefulTime = micros() - loopStartTime;
 
   if (lastLoopUsefulTime < STD_LOOP_TIME) {
-    delay(STD_LOOP_TIME - lastLoopUsefulTime);
+    delayMicroseconds(STD_LOOP_TIME - lastLoopUsefulTime);
   }
 
   lastLoopTime = micros() - loopStartTime;
@@ -165,7 +191,7 @@ void loop() {
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-void read_sensors() {
+void read_sensors() {         // Reading the ultrasonic- and light sensors
   /////////////////////////////////////////////////////////////////////////////////////////////////
 
   // reading light sensors happens here
@@ -216,27 +242,39 @@ void determine_direction() {
       break;
 
     case 2:   // found box, grab ball
+      stay_in_dist();
+      grab_ball();
       break;
 
     case 3:   // grabbed ball, turn
+      // TODO: Turning. Includes: reverse motor, turn right, reverse again, turn right again. hardcoded?
       break;
 
     case 4:   // follow line
+      follow_line();
       break;
 
     case 5:   // near end
+      // TODO: Trigger? Timer?
+      follow_line();
+      close_in();
       break;
 
     case 6:   // found second box, drop ball
+      stay_in_dist();
+      release_ball();
       break;
 
     case 7:   // finished.
+      send_finish(1);
       break;
 
     case 8:   // fell over. FAIL.
+      send_finish(2);
       break;
 
     default:  // shouldn't happen
+      send_finish(3);
       break;
 
     } // end of stage-switch
@@ -308,6 +346,8 @@ void set_stage(int newstage) {
 void follow_line() {    // line-following logic is going to happen here !
   /////////////////////////////////////////////////////////////////////////////////////////////////
 
+  // TODO: @Victor this needs improvement.
+
   tmp = 0;
 
   if (lsens[0]) {
@@ -350,7 +390,7 @@ void follow_line() {    // line-following logic is going to happen here !
 //    case 5: //middle nothing
 //    case 7: //all 1
     default:
-      delay(500);
+      delay(500); // might be deadly. Who knows
       // direction = 0;
       // percent = 0;
       break;
@@ -360,15 +400,23 @@ void follow_line() {    // line-following logic is going to happen here !
 
 
 
+
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-void close_in() {       // closing in on the box
+/////////////                      Ultrasonic control section                    //////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// TODO: Paul - improve!
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void close_in() {             // closing in on the box
   /////////////////////////////////////////////////////////////////////////////////////////////////
 
   if ((distance < 3 && distance != 0) || (old_distance < 3 && old_distance != 0)) {
     set_stage(stage + 1);
   } else if (distance != 0 || old_distance != 0) {
     // direction = 0;
-    percent += 3;
+    percent += 4;
   }
 
 } // end of close_in
@@ -376,17 +424,58 @@ void close_in() {       // closing in on the box
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-void stay_in_dist() {     // staying this close to the box
+void stay_in_dist() {         // staying as close to the box as we already are
   /////////////////////////////////////////////////////////////////////////////////////////////////
 
   if ((distance < 3 && distance != 0) || (old_distance < 3 && old_distance != 0)) {
     // direction = 0;
-    percent -= 3;
+    percent -= 2;
   } else if (distance != 0 || old_distance != 0) {
     // direction = 0;
-    percent += 3;
+    percent += 2;
   }
 } // end of stay_in_dist
+
+
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////                      Ball ... control section                      //////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// TODO: Paul - improve!
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void grab_ball() {        // actually Grabbing the ball. verifying with a sensor?
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+  analogWrite(grabPin1, 50);
+  delay(500);          // this might need improvement, might not stay in correct distance otherwise
+  analogWrite(grabPin1, 0);
+} // end of grab_ball
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void release_ball() {        // actually Grabbing the ball. verifying with a sensor?
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+  analogWrite(grabPin2, 50);
+  delay(500);          // this might need improvement, might not stay in correct distance otherwise
+  analogWrite(grabPin2, 0);
+} // end of grab_ball
+
+
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void send_finish(int8_t message) {      // finished with task, end.
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+  finished = message;
+
+}
 
 
 
@@ -399,48 +488,5 @@ void MotorUse(int pin, int speed, bool reverse){
 
 
 /*
-  Code found at: http://www.instructables.com/id/Simple-Arduino-and-HC-SR04-Example/?ALLSTEPS
-
- HC-SR04 Ping distance sensor]
- VCC to arduino 5v GND to arduino GND
- Echo to Arduino pin 13 Trig to Arduino pin 12
- Red POS to Arduino pin 11
- Green POS to Arduino pin 10
- 560 ohm resistor to both LED NEG and GRD power rail
- More info at: http://goo.gl/kJ8Gl
- Original code improvements to the Ping sketch sourced from Trollmaker.com
- Some code and wiring inspired by http://en.wikiversity.org/wiki/User:Dstaub/robotcar
-
-
-void setup() {
-  Serial.begin (9600);
-  pinMode(trigPin, OUTPUT);
-  pinMode(echoPin, INPUT);
-}
-
-void loop() {
-  long duration, distance;
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
-  duration = pulseIn(echoPin, HIGH);
-  distance = (duration/2) / 29.1;
-  if (distance < 4) {
-    // within specified distance
-}
-  else {
-    // Out of specified distance
-  }
-  if (distance >= 200 || distance <= 0){
-    Serial.println("Out of range");
-  }
-  else {
-    Serial.print(distance);
-    Serial.println(" cm");
-  }
-  delay(500);
-}
-
+  Example Code found at: http://www.instructables.com/id/Simple-Arduino-and-HC-SR04-Example/?ALLSTEPS
 */

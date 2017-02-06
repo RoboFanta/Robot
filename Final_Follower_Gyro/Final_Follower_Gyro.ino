@@ -9,29 +9,30 @@
 
 
 // Last Modified:
-// 2017-02-04     For Uni Project.     Felix Karg
+// 2017-02-06     For Uni Project.     Felix Karg
 
 
 /*
-This Arduino code will take inputs from a digital MPU6050 IMU and a few switches.
-The resulting serial output is used to control a Saber motor controller by Dimension Engineering.
-This code has been written with knowledge and education gained from the following people:
-Jeff Rowberg: https://github.com/jrowberg/i2cdevlib
-XenonJohn: http://www.instructables.com/id/Self-balancing-skateboardsegwy-project-Arduino-S/
-ScitechWA: http://www.instructables.com/id/Self-Balancing-Scooter-Ver-20/
-Geekmom: http://www.geekmomprojects.com/mpu-6050-dmp-data-from-i2cdevlib/
-Julian Arnott
-Eric Wang
+This Arduino code will take inputs from a digital MPU6050 IMU and a second arduino.
+It is connected with a second arduino (whose job it is to navigate and overall control the situation)
+and two motors for staying upright.
 
-
-This Code in Particular is from: http://www.instructables.com/id/Rideable-Segway-Clone-Low-Cost-and-Easy-Build/step8/The-Arduino-Code/
+The first version of this code is from: 
+http://www.instructables.com/id/Rideable-Segway-Clone-Low-Cost-and-Easy-Build/step8/The-Arduino-Code/
 Accessed at 2014-01-28 16:00
-Modified by Felix Karg <felix.karg@uranus.uni-freiburg.de>
-for trying a Segway-style robot at the SDP Project.
 
-Only Files including this line are Licensed under CC 2.5
+
+Written mainly by   Felix Karg     <felix.karg@uranus.uni-freiburg.de>
+improvements from   Paul Boeninger <>
+              and   Victor Maier   <>
+
+For trying a Segway-style robot at the SDP Project, University of Freiburg, WS2016/17.
+
 (This includes this file as well as the 'more' original Code included as well, and other files derived from it.)
+Only Files including this line are Licensed under CC 2.5
+(Available here: https://creativecommons.org/licenses/by/2.5/legalcode )
 */
+
 
 #include <Wire.h>
 #include "I2Cdev.h"
@@ -55,12 +56,12 @@ float aa_constant = 0.005; //this means 0.5% of the accelerometer reading is fed
 //too high though and the board may become too vibration sensitive.
 
 //Debug  note: "cntrl /" for group comment
-#define DEBUG_FORCE_DEADMAN_SWITCH 0 //normal
-// #define DEBUG_ENABLE_PRINTING 0 //normal
+// #define DEBUG_FORCE_DEADMAN_SWITCH 0 //normal
+#define DEBUG_ENABLE_PRINTING 0 //normal
 #define DEBUG_DISABLE_MOTORS 0 //normal
 
-// #define DEBUG_FORCE_DEADMAN_SWITCH 1 //DEBUG ONLY...Force on for debug only.  Not for operation!!
-#define DEBUG_ENABLE_PRINTING 1 //DEBUG ONLY... turn off for real operation! - we might use it however.
+#define DEBUG_FORCE_DEADMAN_SWITCH 1 //DEBUG ONLY...Force on for debug only.  Not for operation!!
+// #define DEBUG_ENABLE_PRINTING 1 //DEBUG ONLY... turn off for real operation! - we might use it however.
 // #define DEBUG_DISABLE_MOTORS 1 //DEBUG ONLY... turn off for real operation!
 //Debug
 
@@ -104,6 +105,7 @@ int deadmanButtonPin    = 4;  // deadman button is digital input pin
 int balanceForwardPin   = 8;  //if digital pin  is 5V then reduce balancepoint variable. Allows manual fine tune of the ideal target balance point
 int balanceBackwardPin  = 7;  //if digital pin  is 5V then increase balancepoint variable. Allows manual fine tune of the ideal target balance point
 
+int8_t finished = 0;
 int8_t percent = 0;
 int8_t direction = 0;
 /*  -3 = LEEFT!!
@@ -246,15 +248,17 @@ void setup() { // run once, when the sketch starts
   devStatus = mpu.dmpInitialize();
 
 /*
-  // supply your own gyro offsets here, scaled for min sensitivity
-  Your offsets:  -404  -914  1411  281 74  20                 (Der mit schrägen Pins)
-  Your offsets: -1062 -4557 1144  89  41  -9                  (Der mit geraden Pins)
-  Data is printed as: acelX acelY acelZ giroX giroY giroZ
-
+  // Own gyro offsets:
+  -405   -914   1411   281   74    20         (Der mit schrägen Pins)
+  -1062  -4557  1144   89    41    -9         (Der mit geraden Pins)
+  acelX  acelY  acelZ giroX giroY giroZ
 */
+
   mpu.setXGyroOffset(281);
   mpu.setYGyroOffset(74);
   mpu.setZGyroOffset(20);
+  mpu.setXAccelOffset(-404);
+  mpu.setYAccelOffset(-914);
   mpu.setZAccelOffset(1411);
 
   // make sure it worked (returns 0 if so)
@@ -469,9 +473,13 @@ void read_accel_gyro()  {     //digital accel/gyro is read here
 void get_direction() {
   //////////////////////////////////////////////////////////////////////////////
 
-  Wire.requestFrom(8, 2);
+  Wire.requestFrom(8, 3);
   direction = Wire.read();
   percent = Wire.read();
+  finished = Wire.read();
+  if (finished != 0) {
+    break;
+  }
 
 } // end of get_directions
 
