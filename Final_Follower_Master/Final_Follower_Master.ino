@@ -14,14 +14,13 @@ following a line, and dropping the ball at the designated point.
 
 
 Input:
-1 Light sensor for sensing the ball.
-1 Ultrasonic sensor.
+11 Light sensors.
 
 Output:
-1 Motor for grabbing a ball.
+2 Motors
 
 Communication:
-I2C Slave, Other arduino navigating and following the line.
+I2C Master, Second Arduino having one ball sensor, ball motor and ultrasonic sensor.
 
 
 Written mainly by   Felix Karg     <felix.karg@uranus.uni-freiburg.de>
@@ -36,10 +35,15 @@ License is GPL-v3.
 
 
 
+
+
 #include <Wire.h>
-#include "I2Cdev.h"
-#include <NewPing.h>
-#include <Servo.h>
+#include <I2Cdev.h>
+
+
+
+
+
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,30 +55,33 @@ A4 (I2C SDA)
 A5 (I2C SCL)
 
 
-Motor: (for ball grabbing)
-2 Pins, analog (?)
+2 Motors:
+2 Pins each, both pwm.
+Pins:
+5, 10
+6, 11
 
-Light Sensor:
+
+Light Sensors:
 1 Pin, digital
+Pins:
+4, 7, 8, 12,
+14, 15, 16, 17
 
-Ultrasonic:
-2 Pins:
+Lightsensor-Array:
 
-
-
-Other required:
-3 or more Light-Sensors, arranged next to each other in certain distances.
-Easily changeable (hopefully).
+  x x x     <- front row, probably inaccurate
+  N_cm_
+ [xxxxx]    <- main row, following line
+ |10 cm|    <- Robot
+ [x_x_x]    <- correcting row, other arduino
 
 
 Specs:
 Arduino Nano
 Connected with:
-1 Motor for taking up the ball
-1 Ultrasonic Sensor
-Several light-sensitive Sensors, for following a line
-Connected on an I2C bus, will return current should-be
-direction if asked for.
+2 Motors for driving
+8 light sensors for primary navigation
 
 
 Optional (might not be included in code as of yet):
@@ -85,70 +92,75 @@ centimeters before the actual vehicle.
 */ // end of general information
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+//5er reihe sensoren
+#define lmain_lenght 5
+#define lfront_lenght 3
+const int lmain[lmain_lenght]={12,14,15,16,17};
+//3er reihe lichtsensoren vorne
+const int lfront[lfront_lenght]={4,7,8};
+//array alte werte
+uint8_t oldvar_ptr=0;
+uint8_t oldvars[1<<4];
+bool readLight = false;
 
+// motor control
+int direction = 0;
+/*
+    -3 = LEEFT!!
+    -2 = more left
+    -1 = slight left
+     0 = straight ahead
+     1 = slight right
+     2 = more right
+     3 = To the RIIIGHT!!
+*/
+
+
+// Motor Right:
+int mrforward = 5;
+int mrreverse = 10;
+
+// Motor Left:
+int mlforward = 6;
+int mlreverse = 11;
+
+
+// other Arduino:
+int finished = 0;
 int stage = 0;
-
-
-// for ultrasonic sensor
-int trigPin = 10; // some digital pin
-int echoPin = 11; // some digital pin
-int distance, old_distance, diff;
-NewPing sonar(trigPin, echoPin, 14);
 bool askForDist = false;
 
 
-// for light sensors
-int lsensor[3] = {7, 8, 9};    // left, middle, right sensor
-int light_d[3];
-uint8_t others_old = 0;  // other eight sensors (old values)
-uint8_t others = 0;  // other eight sensors
-bool readLight = false;
-
-
-// ball sensor
-int ballsensor = 12; // checking if the ball is there or not
-bool isBall = false;
-
-
-// grabbing motor:
-int pos = 0;
-int newPos = 0;
-int servoPin = 6;
-Servo myServo;
-
-
 // loop control
-int STD_LOOP_TIME = 499; //499= 500us loop time // code that keeps loop time at 500us per cycle of main program loop
+int STD_LOOP_TIME = 49; //49= 50us loop time // code that keeps loop time at 50us per cycle of main program loop
 int lastLoopTime = STD_LOOP_TIME;
 int lastLoopUsefulTime = STD_LOOP_TIME;
 unsigned long loopStartTime = 0;
 
-
-
-// other arduino state
-int finished = 0;
-int percent = 0;
-int direction = 0;
-
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void setup() {
   /////////////////////////////////////////////////////////////////////////////////////////////////
-  Wire.begin(8); // Join I2C bus with slave address #8
+  Wire.begin(); // Join I2C bus as master.
   TWBR = 24; // 400kHz I2C clock (Fast)
-  myServo.attach(servoPin); // attaches the servo pin, for controlloing over the object now.
 
   Wire.onRequest(return_values);
   Wire.onReceive(recv_event);
 
-  pinMode(lsensor[0], INPUT);
-  pinMode(lsensor[1], INPUT);
-  pinMode(lsensor[2], INPUT);
+  // setting the five main light sensors as input pins
+  for(int i=0; i < lmain_lenght; i++) pinMode(lmain[i], INPUT);
 
-  pinMode(trigPin, OUTPUT);
-  pinMode(echoPin, INPUT);
+  // setting the three front light sensors as input pins
+  for(int i=0; i < lfront_lenght; i++) pinMode(lfront[i], INPUT);
+
+  pinMode(mrforward, OUTPUT);
+  pinMode(mrreverse, OUTPUT);
+
+  pinMode(mlforward, OUTPUT);
+  pinMode(mlreverse, OUTPUT);
 
 } // end of setup
+
+
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -163,6 +175,7 @@ void recv_event(int num_bytes) {
   /////////////////////////////////////////////////////////////////////////////////////////////////
 
 } // end of recv_event
+
 
 
 
@@ -181,14 +194,22 @@ void loop() {         // Main Control loop
 
   read_sensors();
 
-  // determine_action();
+  follow_line();
 
-  if (newPos > pos)
-    pos++;
-  if (newPos < pos)
-    pos--;
+  set_motors();
 
 } // end of loop
+
+
+
+uint8_t read_X_pins (int* pins, uint8_t lenght){
+  uint8_t x = 0;
+  while(lenght--){
+    x |= digitalRead(pins[lenght]) << lenght;
+  }
+  return x;
+}
+
 
 
 
@@ -196,23 +217,42 @@ void loop() {         // Main Control loop
 void read_sensors() {         // Reading the ultrasonic- and light sensors
   /////////////////////////////////////////////////////////////////////////////////////////////////
 
-  // Ultrasonic reading happens here
-  if (askForDist) {
-    old_distance = distance;    // old value for more accuracy - current vaule might not be exact
-    distance = sonar.ping_cm(); // getting new current distance
-    if (distance != 0 && old_distance != 0) {
-      diff = abs(distance - old_distance);
-    }
-  } // end of askForDist
-
-  isBall = digitalRead(ballsensor);
-
+  // light sensor reading goes here
   if (readLight) {
-    for (int i = 0; i < 3; i++)
-      light_d[i] = digitalRead(lsensor[i]);
   }
 
 } // end of read_sensors
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void follow_line() {    // line-following logic is going to happen here !
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+  // @Victor: TODO: write
+
+  // should only set the variable direction
+  /*  -3 = LEEFT!!
+      -2 = more left
+      -1 = slight left
+       0 = straight ahead
+       1 = slight right
+       2 = more right
+       3 = To the RIIIGHT!!
+  */
+
+} // end of follow_line
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void set_motors() {
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+} // end of set_motors
 
 
 
@@ -225,12 +265,11 @@ void determine_action() {
   switch(stage) {
 
     case 1:   // startup complete, search for box
-      close_in();
+      follow_line();
       break;
 
     case 2:   // found box, grab ball
-      stay_in_dist();
-      grab_ball();
+      // grab_ball();
       break;
 
     case 3:   // grabbed ball, turn
@@ -238,16 +277,17 @@ void determine_action() {
       break;
 
     case 4:   // follow line
+      follow_line();
       break;
 
     case 5:   // near end
       // TODO: Trigger? Timer?
-      close_in();
+      follow_line();
       break;
 
     case 6:   // found second box, drop ball
-      stay_in_dist();
-      release_ball();
+      // stay_in_dist();
+      // release_ball();
       break;
 
     case 7:   // finished.
@@ -310,70 +350,6 @@ void set_stage(int newstage) {
 
 
 
-
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-/////////////                      Ultrasonic control section                    //////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-void close_in() {             // closing in on the box
-  /////////////////////////////////////////////////////////////////////////////////////////////////
-
-  if ((distance < 3 && distance != 0) || (old_distance < 3 && old_distance != 0)) {
-    set_stage(stage + 1);
-  } else if (distance != 0 || old_distance != 0) {
-    // direction = 0;
-    percent += 4;
-  }
-
-} // end of close_in
-
-
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-void stay_in_dist() {         // staying as close to the box as we already are
-  /////////////////////////////////////////////////////////////////////////////////////////////////
-
-  if ((distance < 3 && distance != 0) || (old_distance < 3 && old_distance != 0)) {
-    // direction = 0;
-    percent -= 2;
-  } else if (distance != 0 || old_distance != 0) {
-    // direction = 0;
-    percent += 2;
-  }
-} // end of stay_in_dist
-
-
-
-
-
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-/////////////                      Ball ... control section                      //////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-void grab_ball() {        // actually Grabbing the ball. verifying with a sensor?
-  /////////////////////////////////////////////////////////////////////////////////////////////////
-  newPos = 135;
-} // end of grab_ball
-
-
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-void release_ball() {        // actually Grabbing the ball. verifying with a sensor?
-  /////////////////////////////////////////////////////////////////////////////////////////////////
-  newPos = 36;
-} // end of grab_ball
-
-
-
-
-
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void send_finish(int8_t message) {      // finished with task, end.
   /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -381,6 +357,4 @@ void send_finish(int8_t message) {      // finished with task, end.
 
 }
 
-/*
-  Example Code found at: http://www.instructables.com/id/Simple-Arduino-and-HC-SR04-Example/?ALLSTEPS
-*/
+

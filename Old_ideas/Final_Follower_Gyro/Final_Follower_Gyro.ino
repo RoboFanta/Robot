@@ -17,7 +17,7 @@ This Arduino code will take inputs from a digital MPU6050 IMU and a second ardui
 It is connected with a second arduino (whose job it is to navigate and overall control the situation)
 and two motors for staying upright.
 
-The first version of this code is from: 
+The first version of this code is from:
 http://www.instructables.com/id/Rideable-Segway-Clone-Low-Cost-and-Easy-Build/step8/The-Arduino-Code/
 Accessed at 2014-01-28 16:00
 
