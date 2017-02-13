@@ -41,6 +41,8 @@ License is GPL-v3.
 #include <NewPing.h>
 #include <Servo.h>
 
+#define DEBUG 1
+// #define DEBUG 0
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 /*                        GENERAL INFORMATION
@@ -86,28 +88,20 @@ centimeters before the actual vehicle.
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-int stage = 0;
-
-
 // for ultrasonic sensor
 int trigPin = 10; // some digital pin
 int echoPin = 11; // some digital pin
 int distance, old_distance, diff;
-NewPing sonar(trigPin, echoPin, 14);
-bool askForDist = false;
+NewPing sonar(trigPin, echoPin, 20);
 
 
 // for light sensors
 int lsensor[3] = {7, 8, 9};    // left, middle, right sensor
-int light_d[3];
-uint8_t others_old = 0;  // other eight sensors (old values)
-uint8_t others = 0;  // other eight sensors
-bool readLight = false;
+bool light_d[3];
 
 
 // ball sensor
 int ballsensor = 12; // checking if the ball is there or not
-bool isBall = false;
 
 
 // grabbing motor:
@@ -124,22 +118,38 @@ int lastLoopUsefulTime = STD_LOOP_TIME;
 unsigned long loopStartTime = 0;
 
 
+// own arduino state
+int own_state = 0;
+bool askForDist = false;
+bool readLight = false;
+bool isBall = false;
+bool haveBall = false;
+
 
 // other arduino state
-int finished = 0;
+int other_state = 0;
 int percent = 0;
 int direction = 0;
+uint8_t others_old = 0;  // other eight sensors (old values)
+uint8_t others = 0;  // other eight sensors
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void setup() {
   /////////////////////////////////////////////////////////////////////////////////////////////////
+
+  if (DEBUG)
+    Serial.begin(9600);
+
   Wire.begin(8); // Join I2C bus with slave address #8
   TWBR = 24; // 400kHz I2C clock (Fast)
+
   myServo.attach(servoPin); // attaches the servo pin, for controlloing over the object now.
 
   Wire.onRequest(return_values);
   Wire.onReceive(recv_event);
+
+  pinMode(ballsensor, INPUT);
 
   pinMode(lsensor[0], INPUT);
   pinMode(lsensor[1], INPUT);
@@ -148,19 +158,57 @@ void setup() {
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
 
+
+  pinMode(LED_BUILTIN, OUTPUT);
+
+  sonar.ping_cm(); // initializing sonar.
+
 } // end of setup
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void return_values() {
   /////////////////////////////////////////////////////////////////////////////////////////////////
+  if (own_state == 0) {
+    Wire.write(1);
+  } else if (own_state < 8) {
+    Wire.write(own_state);
+    if (askForDist)
+      Wire.write(distance);
+    if (readLight) {
+      Wire.write(2 * light_d[0] | 4 * light_d[1] | 8 * light_d[2]);
+    }
+    if (own_state == 3 || own_state == 7) {
+      Wire.write(haveBall);
+    }
+  }
 
+  if (DEBUG) {
+    Serial.print("state: ");
+    Serial.print(own_state);
+    if (askForDist) {
+      Serial.print(" dist: ");
+      Serial.print(distance);
+    }
+    Serial.println("");
+  } // end of DEBUG
 } // end of return_values
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void recv_event(int num_bytes) {
   /////////////////////////////////////////////////////////////////////////////////////////////////
+
+  other_state = Wire.read();
+
+  if (other_state != 4) {
+    others_old = others;
+    others = Wire.read();
+  }
+
+  if (own_state != other_state) {
+    // TODO: change own state somehow.
+  }
 
 } // end of recv_event
 
@@ -181,13 +229,7 @@ void loop() {         // Main Control loop
 
   read_sensors();
 
-  // determine_action();
-
-  if (newPos > pos)
-    pos++;
-  if (newPos < pos)
-    pos--;
-
+  determine_action();
 } // end of loop
 
 
@@ -216,98 +258,124 @@ void read_sensors() {         // Reading the ultrasonic- and light sensors
 
 
 
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void set_state(int newstate) {
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+  switch(own_state) {
+
+    case 0:   // startup and initializion of sensors
+      break;
+
+    case 1:   // startup complete, follow line, listen for ultrasonic
+    case 5:   // follow line, listen for ultrasonic
+      askForDist = true;
+      readLight = false;
+      break;
+
+    case 2:   // closing in on box
+    case 6:   // closing in on box again
+      askForDist = true;
+      readLight = true;
+      break;
+
+    case 3:   // found box, grab ball
+      askForDist = false;
+      readLight = false;
+      newPos = 36;
+      break;
+
+    case 4:   // grabbed ball, turn (This Arduino does nothing)
+      askForDist = false;
+      readLight = false;
+      haveBall = true;
+      break;
+
+    case 7:   // found second box, drop ball
+      askForDist = false;
+      readLight = false;
+      newPos = 150;
+      break;
+
+    case 8:   // finished.
+      askForDist = false;
+      readLight = false;
+      newPos = 36;
+      haveBall = false;
+      break;
+
+    case 9:   // Error somewhere. FAIL.
+      askForDist = false;
+      readLight = false;
+      break;
+
+    default:  // shouldn't happen
+      askForDist = false;
+      readLight = false;
+      digitalWrite(LED_BUILTIN, HIGH);
+      break;
+
+  } // end of state-switch
+} // end of set_state
+
+
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void determine_action() {
   /////////////////////////////////////////////////////////////////////////////////////////////////
 
 // TODO: rewrite
 
-  switch(stage) {
-
-    case 1:   // startup complete, search for box
-      close_in();
-      break;
-
-    case 2:   // found box, grab ball
-      stay_in_dist();
-      grab_ball();
-      break;
-
-    case 3:   // grabbed ball, turn
-      // TODO: Turning. Includes: reverse motor, turn right, reverse again, turn right again. hardcoded?
-      break;
-
-    case 4:   // follow line
-      break;
-
-    case 5:   // near end
-      // TODO: Trigger? Timer?
-      close_in();
-      break;
-
-    case 6:   // found second box, drop ball
-      stay_in_dist();
-      release_ball();
-      break;
-
-    case 7:   // finished.
-      send_finish(1);
-      break;
-
-    case 8:   // fell over. FAIL.
-      send_finish(2);
-      break;
-
-    default:  // shouldn't happen
-      send_finish(3);
-      break;
-
-    } // end of stage-switch
-} // end of determine_action
-
-
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-void set_stage(int newstage) {
-  /////////////////////////////////////////////////////////////////////////////////////////////////
-
-  switch(stage) {
+  /*
+  // As it turns out, all this arduino does is reading it's sensors and sending the values
+  // if requested ... so nothing in particular
+  switch(own_state) {
 
     case 0:   // startup and initializion of sensors
       break;
 
-    case 1:   // startup complete, search for box
+    case 1:   // startup complete, follow line, listen for ultrasonic
+    case 5:   // follow line, listen for ultrasonic
       break;
 
-    case 2:   // found box, grab ball
+    case 2:   // closing in on box
+    case 6:   // closing in on box again
       break;
 
-    case 3:   // grabbed ball, turn
+    case 3:   // found box, grab ball
       break;
 
-    case 4:   // follow line
+    case 4:   // grabbed ball, turn (This Arduino does nothing)
       break;
 
-    case 5:   // near end
+    case 7:   // found second box, drop ball
       break;
 
-    case 6:   // found second box, drop ball
+    case 8:   // finished.
       break;
 
-    case 7:   // finished.
-      break;
-
-    case 8:   // fell over. FAIL.
+    case 9:   // Error somewhere. FAIL.
       break;
 
     default:  // shouldn't happen
-      askForDist = false;
-      readLight = false;
+      delay(500);
       break;
 
-    } // end of stage-switch
-} // end of set_stage
+  } // end of state-switch
 
+  */
+
+  if ((own_state == 3 || own_state == 7) && newPos == pos) {
+    set_state(own_state + 1);
+  }
+
+  if (newPos > pos)
+    pos++;
+  if (newPos < pos)
+    pos--;
+
+} // end of determine_action
 
 
 
@@ -316,13 +384,14 @@ void set_stage(int newstage) {
 /////////////                      Ultrasonic control section                    //////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+/* so much for that ... we simly read out the distance only after all
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void close_in() {             // closing in on the box
   /////////////////////////////////////////////////////////////////////////////////////////////////
 
   if ((distance < 3 && distance != 0) || (old_distance < 3 && old_distance != 0)) {
-    set_stage(stage + 1);
+    set_state(own_state + 1);
   } else if (distance != 0 || old_distance != 0) {
     // direction = 0;
     percent += 4;
@@ -345,6 +414,7 @@ void stay_in_dist() {         // staying as close to the box as we already are
   }
 } // end of stay_in_dist
 
+*/
 
 
 
@@ -353,6 +423,8 @@ void stay_in_dist() {         // staying as close to the box as we already are
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////                      Ball ... control section                      //////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+/* happening somewhere else already ... easier than expected
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -369,17 +441,10 @@ void release_ball() {        // actually Grabbing the ball. verifying with a sen
   newPos = 36;
 } // end of grab_ball
 
+*/
 
 
 
-
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-void send_finish(int8_t message) {      // finished with task, end.
-  /////////////////////////////////////////////////////////////////////////////////////////////////
-  finished = message;
-
-}
 
 /*
   Example Code found at: http://www.instructables.com/id/Simple-Arduino-and-HC-SR04-Example/?ALLSTEPS

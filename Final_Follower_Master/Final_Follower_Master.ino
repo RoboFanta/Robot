@@ -125,10 +125,16 @@ int mlforward = 6;
 int mlreverse = 11;
 
 
-// other Arduino:
-int finished = 0;
-int stage = 0;
+// own Arduino
+int own_stage = 0;
 bool askForDist = false;
+bool askForLightOther = false;
+
+
+// other Arduino:
+int other_stage = 0;
+int distance = 0;
+uint8_t lightOther = 0;
 
 
 // loop control
@@ -136,6 +142,7 @@ int STD_LOOP_TIME = 49; //49= 50us loop time // code that keeps loop time at 50u
 int lastLoopTime = STD_LOOP_TIME;
 int lastLoopUsefulTime = STD_LOOP_TIME;
 unsigned long loopStartTime = 0;
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void setup() {
@@ -147,10 +154,12 @@ void setup() {
   Wire.onReceive(recv_event);
 
   // setting the five main light sensors as input pins
-  for(int i=0; i < lmain_lenght; i++) pinMode(lmain[i], INPUT);
+  for(int i=0; i < lmain_lenght; i++)
+    pinMode(lmain[i], INPUT);
 
   // setting the three front light sensors as input pins
-  for(int i=0; i < lfront_lenght; i++) pinMode(lfront[i], INPUT);
+  for(int i=0; i < lfront_lenght; i++)
+    pinMode(lfront[i], INPUT);
 
   pinMode(mrforward, OUTPUT);
   pinMode(mrreverse, OUTPUT);
@@ -162,10 +171,12 @@ void setup() {
 
 
 
+/* not happening, as this is master
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void return_values() {
   /////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 } // end of return_values
 
@@ -174,8 +185,34 @@ void return_values() {
 void recv_event(int num_bytes) {
   /////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 } // end of recv_event
 
+*/
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void request_values() {
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+  Wire.requestFrom(8, n);
+  Wire.read();
+
+
+} // end of request_values
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void send_values() {
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+  Wire.beginTransmission(8);
+  Wire.write(own_stage);
+  Wire.endTransmission();
+
+} // end of send_values
 
 
 
@@ -262,47 +299,39 @@ void determine_action() {
 
 // TODO: rewrite
 
-  switch(stage) {
+  switch(own_stage) {
 
-    case 1:   // startup complete, search for box
-      follow_line();
+    case 0:   // startup and initializion of sensors
       break;
 
-    case 2:   // found box, grab ball
-      // grab_ball();
+    case 1:   // startup complete, follow line, listen for ultrasonic
+    case 5:   // follow line, listen for ultrasonic
       break;
 
-    case 3:   // grabbed ball, turn
-      // TODO: Turning. Includes: reverse motor, turn right, reverse again, turn right again. hardcoded?
+    case 2:   // closing in on box
+    case 6:   // closing in on box again
       break;
 
-    case 4:   // follow line
-      follow_line();
+    case 3:   // found box, grab ball
       break;
 
-    case 5:   // near end
-      // TODO: Trigger? Timer?
-      follow_line();
+    case 4:   // grabbed ball, turn (This Arduino does nothing)
       break;
 
-    case 6:   // found second box, drop ball
-      // stay_in_dist();
-      // release_ball();
+    case 7:   // found second box, drop ball
       break;
 
-    case 7:   // finished.
-      send_finish(1);
+    case 8:   // finished.
       break;
 
-    case 8:   // fell over. FAIL.
-      send_finish(2);
+    case 9:   // Error somewhere. FAIL.
       break;
 
     default:  // shouldn't happen
-      send_finish(3);
+      delay(500);
       break;
 
-    } // end of stage-switch
+  } // end of state-switch
 } // end of determine_action
 
 
@@ -311,50 +340,49 @@ void determine_action() {
 void set_stage(int newstage) {
   /////////////////////////////////////////////////////////////////////////////////////////////////
 
-  switch(stage) {
+  switch(newstage) {
 
     case 0:   // startup and initializion of sensors
       break;
 
-    case 1:   // startup complete, search for box
+    case 1:   // startup complete, follow line, listen for ultrasonic
+    case 5:   // follow line, listen for ultrasonic
       break;
 
-    case 2:   // found box, grab ball
+    case 2:   // closing in on box
+    case 6:   // closing in on box again
       break;
 
-    case 3:   // grabbed ball, turn
+    case 3:   // found box, grab ball
       break;
 
-    case 4:   // follow line
+    case 4:   // grabbed ball, turn (This Arduino does nothing)
       break;
 
-    case 5:   // near end
+    case 7:   // found second box, drop ball
       break;
 
-    case 6:   // found second box, drop ball
+    case 8:   // finished.
       break;
 
-    case 7:   // finished.
-      break;
-
-    case 8:   // fell over. FAIL.
+    case 9:   // Error somewhere. FAIL.
       break;
 
     default:  // shouldn't happen
-      askForDist = false;
-      readLight = false;
+      delay(500);
       break;
 
-    } // end of stage-switch
+  } // end of state-switch
 } // end of set_stage
 
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-void send_finish(int8_t message) {      // finished with task, end.
+void close_in() {             // closing in on the box
   /////////////////////////////////////////////////////////////////////////////////////////////////
-  finished = message;
 
-}
+  // TODO: get closer to the box using the ultrasonic information
+
+} // end of close_in
 
 

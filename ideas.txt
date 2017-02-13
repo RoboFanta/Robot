@@ -1,0 +1,73 @@
+
+
+States:
+
+
+0: startup and initializion of sensors
+Find line and start communicating with other arduino.
+
+1: startup complete, search for box
+Ultrasonic on, Following line.
+
+2: Closing in on box
+important: staying straight on the line.
+
+3: found box, grab ball
+Close arm, go back a few cm (-> 1) if failing
+
+4: grabbed ball, turn
+Hardcoded.
+
+5: near end
+Ultrasonic on, Following line.
+
+6: Closing in on Line
+
+7: found second box, drop ball
+Simply dropping ball. Waiting.
+
+8: finished.
+Done. Standstill.
+
+9: Something unexpected happen.
+Propagate to the other and stop doing anything at all.
+
+
+
+
+
+Übertragung:
+(immer) beide Richtungen: momentaner Zustand.
+(immer) lichtsensoren-infos an Ultraschall
+(immer) Neueste distanz vom Ultraschall
+2, 6: 3 Lichtsensoren an Fahrenden
+3: grabbing state of ball
+7: state of dropping ball
+
+
+Arduinos changing state:
+transmitting each time?
+
+
+
+
+Existence per state per arduino:
+State   Grabber     Follower
+0         X            X
+
+1         X            X
+2         X            X
+3         X             .
+
+4                      X
+
+5         X            X    (equal to one?)
+6         X            X    (equal to two?)
+7         X             .
+
+8         X            X
+9         X            X
+
+DoNoting               X    3, 7
+DoNothing X                 4
+
