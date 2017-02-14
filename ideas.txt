@@ -71,3 +71,42 @@ State   Grabber     Follower
 DoNoting               X    3, 7
 DoNothing X                 4
 
+
+
+
+Folgende Pinbelegungen:
+int lshl = 3; //DIG READ
+int lsl = 4; //DIG READ
+int lsr = 7; //DIG READ
+int lshr = 8; //DIG READ
+int lsm = 0; //ANALOG TO DIG READ
+int lshlval = 0;
+int lslval = 0;
+int lsrval = 0;
+int lshrval = 0;
+int lsmval = 0;                               //VORDERE SENSORREIHE
+
+int hlsl = 1; //ANALOG TO DIG READ
+int hlsm = 2; //ANALOG TO DIG READ
+int hlsr = 3; //ANALOG TO DIG READ
+int hlslval = 0;
+int hlsmval = 0;
+int hlsrval = 0;                            //HINTERE SENSORREIHE
+
+int ustr = 2; //DIG WRITE
+int usec = 11; //DIG READ
+int usval = 0;                             //ULTRASCHALL
+
+int grs = 4; //ANALOG TO DIG READ
+int grser = 12; //DIG WRITE
+int grsval = 0;                            //GREIFER
+
+int molpl = 5; //ANALOG WRITE
+int molmi = 9; //ANALOG WRITE
+int morpl = 6; //ANALOG WRITE
+int mormi = 10; //ANALOG WRITE             //MOTOREN
+
+ls = liniensensor
+us = ultraschall
+mo = motor
+gr = greifer
