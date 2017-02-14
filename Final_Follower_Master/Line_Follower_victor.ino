@@ -64,7 +64,7 @@ const digital_read schalter={SCHALTER_PIN,analogdigitalRead}
 
 //states array
 const main_func states[]={init_prog,start_prog,line_way1,get_ball,wenden,line_way2,unget_ball,finish};
-
+int state_index=0;
 //aktuell ausgeführt
 main_func current_state=init_prog;
 int error_timer=0;
@@ -95,7 +95,7 @@ unsigned long loopStartTime = 0;
 //States
 void init_prog(){
 	distance=digitalRead_sensor(schalter);
-	current_state=main_func[1];
+	current_state=main_func[++state_index];
 }
 
 void start_prog(){
