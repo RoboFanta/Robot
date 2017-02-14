@@ -1,145 +1,166 @@
-#include <Servo.h>
-#include <Ultrasonic.h>
 
-typedef struct {int direction; int speed;} motorcontrol;
-typedef int (*read_pins)(uint8_t pin);
-typedef void (*main_func)();
-typedef struct {uint8_t pin; read_pins reader;} digital_read;
+// Final Follower - Final Code for following a line for up to 2 Arduinos,
+// One of which may be controlling two motors based on a Gyro.
 
-//array längen
+
+// Last Modified:
+// 2017-02-06     For Uni Project.     Felix Karg
+
+
+/*
+This Arduino code will take inputs from a few lightsensors,
+and communicates with a second arduino in completing the task of taking up a ball,
+following a line, and dropping the ball at the designated point.
+
+
+Input:
+11 Light sensors.
+
+Output:
+2 Motors
+
+Communication:
+I2C Master, Second Arduino having one ball sensor, ball motor and ultrasonic sensor.
+
+
+Written mainly by   Felix Karg     <felix.karg@uranus.uni-freiburg.de>
+improvements from   Paul Boeninger <>
+              and   Victor Maier   <>
+
+For trying a Arduino-style robot at the SDP Project, University of Freiburg, WS2016/17.
+
+License is GPL-v3.
+(included in subdirectory)
+*/
+
+
+
+
+
+#include <Wire.h>
+#include <I2Cdev.h>
+
+
+
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+/*                        GENERAL INFORMATION
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+Pins for More or less controlling arduino:
+A4 (I2C SDA)
+A5 (I2C SCL)
+
+
+2 Motors:
+2 Pins each, both pwm.
+Pins:
+5, 10
+6, 11
+
+
+Light Sensors:
+1 Pin, digital
+Pins:
+4, 7, 8, 12,
+14, 15, 16, 17
+
+Lightsensor-Array:
+
+  x x x     <- front row, probably inaccurate
+  N_cm_
+ [xxxxx]    <- main row, following line
+ |10 cm|    <- Robot
+ [x_x_x]    <- correcting row, other arduino
+
+
+Specs:
+Arduino Nano
+Connected with:
+2 Motors for driving
+8 light sensors for primary navigation
+
+
+Optional (might not be included in code as of yet):
+Light sensors put up on front, detecting the line several
+centimeters before the actual vehicle.
+
+
+*/ // end of general information
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+//5er reihe sensoren
 #define lmain_lenght 5
-#define lback_lenght 3
-#define oldvar_size (1<<4)
-
-#define STD_LOOP_TIME 49
-//49= 50us loop time // code that keeps loop time at 50us per cycle of main program loop
-
-
-#define ERROR_TIME ((STD_LOOP_TIME+1)*400)
-
-#define SPEED_VSLOW 48
-#define SPEED_SLOW 92
-#define SPEED_MIDDLE 128
-#define SPEED_FAST 178
-#define SPEED_VFAST 255
-
-#define DIRECTION_RIGHT_1 31
-#define DIRECTION_RIGHT_2 63
-#define DIRECTION_RIGHT_3 127
-#define DIRECTION_LEFT_1 -31
-#define DIRECTION_LEFT_2 -63
-#define DIRECTION_LEFT_3 -127
-
-#define MOTOR_STOP 0
-#define MOTOR_MAX 255
-#define DIRECTION_NON 0
-
-//servo winkel
-#define SERVO_OPEN 138
-#define SERVO_CLOSE 43
-//Scan heufigkeit 1/scan_us
-#define SCANS_US 10
-
-//c.a. 15cm
-#define US_TIMEOUT 900
-#define GET_DISTANCE(US_SENSOR) US_SENSOR->Ranging(1)
-#define digitalRead_sensor(SENSOR) SENSOR.reader(SENSOR.pin)
-//Pinconfig
-// Motor Right:
-#define mrforward 5
-#define mrreverse 10
-// Motor Left:
-#define mlforward 6
-#define mlreverse 11
-
-#define SCHALTER_PIN 5
-#define SERVO 11
-#define US_TRIGGER
-#define US_ECHO
-
-const digital_read lback[lback_lenght]={{1,analogdigitalRead}/*right*/,{2,analogdigitalRead}/*middle*/,{3,analogdigitalRead/*left*/}};
-const digital_read greifer_sensor = {4,digitalRead};
-const digital_read lmain[lmain_lenght]={{7,digitalRead/*right*/},{0,analogdigitalRead/*middle*/},{4,digitalRead/*left*/},{8,digitalRead/*xright*/},{3,digitalRead/*xleft*/}};
-const digital_read schalter={SCHALTER_PIN,analogdigitalRead}
-
-//states array
-const main_func states[]={init_prog,start_prog,line_way1,get_ball,wenden,line_way2,unget_ball,finish};
-
-//aktuell ausgeführt
-main_func current_state=init_prog;
-int error_timer=0;
-uint8_t oldvar_ptr=0;
-uint8_t oldvars[oldvar_size];
-//ANALOGPIN
-Ultrasonic dist_sensor;
-motorcontrol old_var;
-Servo greifer;
-uint8_t distance=15;
-
-int X=0;
-
-
-
-
-int analogdigitalRead(uint8_t pin){ return ((analogRead(pin)<128)?LOW:HIGH);}
+#define lfront_lenght 3
+const int lmain[lmain_lenght]={12,14,15,16,17};
 //3er reihe lichtsensoren vorne
-//ANALOG
+const int lfront[lfront_lenght]={4,7,8};
 //array alte werte
+uint8_t oldvar_ptr=0;
+uint8_t oldvars[1<<4];
+bool readLight = false;
+
+// motor control
+int direction = 0;
+/*
+    -3 = LEEFT!!
+    -2 = more left
+    -1 = slight left
+     0 = straight ahead
+     1 = slight right
+     2 = more right
+     3 = To the RIIIGHT!!
+*/
+
+
+// Motor Right:
+int mrforward = 5;
+int mrreverse = 10;
+
+// Motor Left:
+int mlforward = 6;
+int mlreverse = 11;
+
+
+// own Arduino
+int own_stage = 0;
+bool askForDist = false;
+bool askForLightOther = false;
+
+
+// other Arduino:
+int other_stage = 0;
+int distance = 0;
+uint8_t lightOther = 0;
+
 
 // loop control
+int STD_LOOP_TIME = 49; //49= 50us loop time // code that keeps loop time at 50us per cycle of main program loop
 int lastLoopTime = STD_LOOP_TIME;
 int lastLoopUsefulTime = STD_LOOP_TIME;
 unsigned long loopStartTime = 0;
 
 
-//States
-void init_prog(){
-	distance=digitalRead_sensor(schalter);
-	current_state=main_func[1];
-}
-
-void start_prog(){
-	uint8_t current_value=digitalRead_sensor(schalter);
-	if(current_value!=X) {current_state=main_func[2];
-		X=0;
-	}else{//kann man weglassen :D
-		X=current_value;
-	}
-}
-void line_way1(){
-	if(!((X++)%SCANS_US)) distance=GET_DISTANCE;
-	if(digitalRead_sensor(greifer_sensor))
-		set_motors(old_var=follow_line(old_var));
-	current_state=main_func[3];
-}
-void get_ball(){
-	current_state=main_func[3];
-}
-void wenden(){
-	current_state=main_func[3];
-}
-void line_way2(){
-	if(!((X++)%SCAN_US)) distance=GET_DISTANCE;
-	if(digitalRead_sensor(greifer_sensor))
-		set_motors(old_var=follow_line(old_var));
-	current_state=main_func[3];
-}
-void unget_ball(){
-	current_state=main_func[3];
-}
-void finish(){
-	
-}
-//end States
-
+///////////////////////////////////////////////////////////////////////////////////////////////////
 void setup() {
-  // setting the five main light sensors as input pins !NEU MACHEN WICHTIG!
-  for(int i=0; i < lmain_lenght; i++) pinMode(lmain[i].pin, INPUT);
-  greifer.attach(SERVO);
-  // setting the three front light sensors as input pins !NEU MACHEN WICHTIG!
-  for(int i=0; i < lfront_lenght; i++) pinMode(lfront[i].pin, INPUT);
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+  Wire.begin(); // Join I2C bus as master.
+  TWBR = 24; // 400kHz I2C clock (Fast)
 
-  dist_sensor = new Ultrasonic(US_TRIGGER,US_ECHO,US_TIMEOUT);
+  Wire.onRequest(return_values);
+  Wire.onReceive(recv_event);
+
+  // setting the five main light sensors as input pins
+  for(int i=0; i < lmain_lenght; i++)
+    pinMode(lmain[i], INPUT);
+
+  // setting the three front light sensors as input pins
+  for(int i=0; i < lfront_lenght; i++)
+    pinMode(lfront[i], INPUT);
+
   pinMode(mrforward, OUTPUT);
   pinMode(mrreverse, OUTPUT);
 
@@ -148,9 +169,57 @@ void setup() {
 
 } // end of setup
 
+
+
+/* not happening, as this is master
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void return_values() {
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+} // end of return_values
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void recv_event(int num_bytes) {
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+} // end of recv_event
+
+*/
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void request_values() {
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+  Wire.requestFrom(8, n);
+  Wire.read();
+
+
+} // end of request_values
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void send_values() {
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+  Wire.beginTransmission(8);
+  Wire.write(own_stage);
+  Wire.endTransmission();
+
+} // end of send_values
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 void loop() {         // Main Control loop
-	if(error_timer)
-	if((--error_timer)<1) digitalWrite(LED_BUILTIN,LOW);
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
   lastLoopUsefulTime = micros() - loopStartTime;
 
   if (lastLoopUsefulTime < STD_LOOP_TIME) {
@@ -160,159 +229,160 @@ void loop() {         // Main Control loop
   lastLoopTime = micros() - loopStartTime;
   loopStartTime = micros();
 
-  current_state();
-  
+  read_sensors();
+
+  follow_line();
+
+  set_motors();
 
 } // end of loop
 
-void collect_ball(){
-	greifer.write(SERVO_OPEN);
-	while(digitalRead_sensor(greifer_sensor)==LOW);
-	greifer.write(SERVO_CLOSE);
-}
 
-uint8_t read_X_pins (digital_read* pins, uint8_t lenght){
+
+uint8_t read_X_pins (int* pins, uint8_t lenght){
   uint8_t x = 0;
   while(lenght--){
-    x |= digitalRead_sensor(pins[lenght]) << lenght;
+    x |= digitalRead(pins[lenght]) << lenght;
   }
   return x;
 }
 
-void error(){
-	error_timer=ERROR_TIME;
-	digitalWrite(LED_BUILTIN,HIGH);
-}
 
-//geht nicht rückwärz
-void set_motors(motorcontrol moto) {
-  if(moto.direction!=DIRECTION_NON){
-		if(moto.direction<DIRECTION_NON){
-			analogWrite(mlforward,((int)(moto.speed)+(int)(moto.direction)<MOTOR_STOP)? MOTOR_STOP : (moto.speed+moto.direction) );
-			analogWrite(mrforward,((int)(moto.speed)-(int)(moto.direction)>MOTOR_MAX)? MOTOR_MAX : (moto.speed-moto.direction) );
-			analogWrite(mlreverse,((int)(moto.speed)+(int)(moto.direction)< MOTOR_STOP)?  -(moto.speed+moto.direction) : MOTOR_STOP) ;
-			analogWrite(mrreverse,MOTOR_STOP);
-		}
-		else{
-			analogWrite(mlforward,((int)(moto.speed)+(int)(moto.direction)>MOTOR_MAX)?MOTOR_MAX:moto.speed+moto.direction);
-			analogWrite(mrforward,((int)(moto.speed)-(int)(moto.direction)<MOTOR_STOP)?MOTOR_STOP:moto.speed-moto.direction);
-			analogWrite(mlreverse,MOTOR_STOP);
-			analogWrite(mrreverse,((int)(moto.speed)-(int)(moto.direction) < MOTOR_STOP) ? -(moto.speed-moto.direction) : MOTOR_STOP);
-		}
-  }
-  else{
-  		analogWrite(mrforward,moto.speed);
-		analogWrite(mlforward,moto.speed);
-		analogWrite(mrreverse,MOTOR_STOP);
-  		analogWrite(mlreverse,MOTOR_STOP);
-  }
-} // end of set_motors
 
-motorcontrol follow_line(motorcontrol moto) {
-  uint8_t tmp=0;
-  
-	  oldvars[oldvar_ptr =
-		(oldvar_ptr + 1) & (oldvar_size-1)] = 
-			read_X_pins(lmain, lmain_lenght) /*|(read_X_pins(lmain, lmain_lenght)<<5)*/;
-	switch(tmp&0x18){ //die aeuseren
-		case 0x18://00
-		//moto.speed = /*const*/;
-		break;
-    
-		case 0x10://01
-		moto.speed = SPEED_VSLOW;
-		moto.direction = DIRECTION_RIGHT_3;
-		return moto;
-    
-		case 0x08://10
-		moto.speed = SPEED_VSLOW;
-		moto.direction = DIRECTION_LEFT_3;
-		return moto;
-    
-		case 0x00://11
-		error();
-		moto.direction = DIRECTION_NON;
-		break;
-	}
-	switch(tmp&0x07){
-		case 0x00: //000
-		//use old vars to find line
-		break;
-    
-		case 0x01: //001
-		moto.speed = SPEED_MIDDLE;
-		moto.direction = DIRECTION_RIGHT_2;
-		return moto;
-    
-		case 0x02: //010
-		error();
-		break;
-    
-		case 0x03: //011
-		moto.speed = SPEED_FAST;
-		moto.direction = DIRECTION_RIGHT_1;
-		return moto;
-    
-		case 0x04: //100
-		moto.speed = SPEED_MIDDLE;
-		moto.direction = DIRECTION_LEFT_2;
-		return moto;
-    
-		case 0x05: //101
-		error();
-		break;
-    
-		case 0x06: //110
-		moto.speed = SPEED_FAST;
-		moto.direction = DIRECTION_LEFT_1;
-		return moto;
-    
-		case 0x07: //111
-		//On the way
-		break;
-	}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void read_sensors() {         // Reading the ultrasonic- and light sensors
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+  // light sensor reading goes here
+  if (readLight) {
+  }
+
+} // end of read_sensors
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void follow_line() {    // line-following logic is going to happen here !
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+  // @Victor: TODO: write
+
+  // should only set the variable direction
+  /*  -3 = LEEFT!!
+      -2 = more left
+      -1 = slight left
+       0 = straight ahead
+       1 = slight right
+       2 = more right
+       3 = To the RIIIGHT!!
+  */
+
 } // end of follow_line
 
 
-//komplett neu schreiben!!
-void goto_line(){
-	switch((oldvars[oldvar_ptr]|=(read_X_pins(lback, lback_lenght)<<5))&0xE0){
-		case 0x07: //000
-		//moto.speed = /*const*/SPEED_VSLOW;
-		//slow a little down
-		break;
-		
-		case 0x06: //001
-		//moto.speed = /*middle*/;
-		//right
-		break;
-		
-		case 0x05: //010
-		//moto.speed = /*max*/;
-		//speed up
-		break;
-		
-		case 0x04: //011
-		//moto.speed = /*min*/;
-		//90° right
-		break;
-		
-		case 0x03: //100
-		//moto.speed = /*middle*/;
-		//left
-		break;
-    
-		case 0x02: //101
-		//??
-		break;
-    
-		case 0x01: //110
-		//moto.speed = /*max*/;
-		//90° left
-		break;
-    
-		case 0x00: //111
-		//??
-		break;
-	}
-}
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void set_motors() {
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+} // end of set_motors
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void determine_action() {
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+// TODO: rewrite
+
+  switch(own_stage) {
+
+    case 0:   // startup and initializion of sensors
+      break;
+
+    case 1:   // startup complete, follow line, listen for ultrasonic
+    case 5:   // follow line, listen for ultrasonic
+      break;
+
+    case 2:   // closing in on box
+    case 6:   // closing in on box again
+      break;
+
+    case 3:   // found box, grab ball
+      break;
+
+    case 4:   // grabbed ball, turn (This Arduino does nothing)
+      break;
+
+    case 7:   // found second box, drop ball
+      break;
+
+    case 8:   // finished.
+      break;
+
+    case 9:   // Error somewhere. FAIL.
+      break;
+
+    default:  // shouldn't happen
+      delay(500);
+      break;
+
+  } // end of state-switch
+} // end of determine_action
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void set_stage(int newstage) {
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+  switch(newstage) {
+
+    case 0:   // startup and initializion of sensors
+      break;
+
+    case 1:   // startup complete, follow line, listen for ultrasonic
+    case 5:   // follow line, listen for ultrasonic
+      break;
+
+    case 2:   // closing in on box
+    case 6:   // closing in on box again
+      break;
+
+    case 3:   // found box, grab ball
+      break;
+
+    case 4:   // grabbed ball, turn (This Arduino does nothing)
+      break;
+
+    case 7:   // found second box, drop ball
+      break;
+
+    case 8:   // finished.
+      break;
+
+    case 9:   // Error somewhere. FAIL.
+      break;
+
+    default:  // shouldn't happen
+      delay(500);
+      break;
+
+  } // end of state-switch
+} // end of set_stage
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void close_in() {             // closing in on the box
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+  // TODO: get closer to the box using the ultrasonic information
+
+} // end of close_in
+
+
