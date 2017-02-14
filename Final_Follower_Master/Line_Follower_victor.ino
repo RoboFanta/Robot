@@ -46,16 +46,16 @@ typedef struct {uint8_t pin; read_pins reader;} digital_read;
 #define digitalRead_sensor(SENSOR) SENSOR.reader(SENSOR.pin)
 //Pinconfig
 // Motor Right:
-#define mrforward 5
-#define mrreverse 10
+#define MRFORWARD 5
+#define MRREVERSE 10
 // Motor Left:
-#define mlforward 6
-#define mlreverse 11
+#define MLFORWARD 5
+#define MLREVERSE 11
 
 #define SCHALTER_PIN 5
-#define SERVO 11
-#define US_TRIGGER
-#define US_ECHO
+#define SERVO 12
+#define US_TRIGGER 2
+#define US_ECHO 11
 
 const digital_read lback[lback_lenght]={{1,analogdigitalRead}/*right*/,{2,analogdigitalRead}/*middle*/,{3,analogdigitalRead/*left*/}};
 const digital_read greifer_sensor = {4,digitalRead};
@@ -140,11 +140,11 @@ void setup() {
   for(int i=0; i < lfront_lenght; i++) pinMode(lfront[i].pin, INPUT);
 
   dist_sensor = new Ultrasonic(US_TRIGGER,US_ECHO,US_TIMEOUT);
-  pinMode(mrforward, OUTPUT);
-  pinMode(mrreverse, OUTPUT);
+  pinMode(MRFORWARD, OUTPUT);
+  pinMode(MRREVERSE, OUTPUT);
 
-  pinMode(mlforward, OUTPUT);
-  pinMode(mlreverse, OUTPUT);
+  pinMode(MLFORWARD, OUTPUT);
+  pinMode(MLREVERSE, OUTPUT);
 
 } // end of setup
 
@@ -188,23 +188,23 @@ void error(){
 void set_motors(motorcontrol moto) {
   if(moto.direction!=DIRECTION_NON){
 		if(moto.direction<DIRECTION_NON){
-			analogWrite(mlforward,((int)(moto.speed)+(int)(moto.direction)<MOTOR_STOP)? MOTOR_STOP : (moto.speed+moto.direction) );
-			analogWrite(mrforward,((int)(moto.speed)-(int)(moto.direction)>MOTOR_MAX)? MOTOR_MAX : (moto.speed-moto.direction) );
-			analogWrite(mlreverse,((int)(moto.speed)+(int)(moto.direction)< MOTOR_STOP)?  -(moto.speed+moto.direction) : MOTOR_STOP) ;
-			analogWrite(mrreverse,MOTOR_STOP);
+			analogWrite(MLFORWARD,((int)(moto.speed)+(int)(moto.direction)<MOTOR_STOP)? MOTOR_STOP : (moto.speed+moto.direction) );
+			analogWrite(MRFORWARD,((int)(moto.speed)-(int)(moto.direction)>MOTOR_MAX)? MOTOR_MAX : (moto.speed-moto.direction) );
+			analogWrite(MLREVERSE,((int)(moto.speed)+(int)(moto.direction)< MOTOR_STOP)?  -(moto.speed+moto.direction) : MOTOR_STOP) ;
+			analogWrite(MRREVERSE,MOTOR_STOP);
 		}
 		else{
-			analogWrite(mlforward,((int)(moto.speed)+(int)(moto.direction)>MOTOR_MAX)?MOTOR_MAX:moto.speed+moto.direction);
-			analogWrite(mrforward,((int)(moto.speed)-(int)(moto.direction)<MOTOR_STOP)?MOTOR_STOP:moto.speed-moto.direction);
-			analogWrite(mlreverse,MOTOR_STOP);
-			analogWrite(mrreverse,((int)(moto.speed)-(int)(moto.direction) < MOTOR_STOP) ? -(moto.speed-moto.direction) : MOTOR_STOP);
+			analogWrite(MLFORWARD,((int)(moto.speed)+(int)(moto.direction)>MOTOR_MAX)?MOTOR_MAX:moto.speed+moto.direction);
+			analogWrite(MRFORWARD,((int)(moto.speed)-(int)(moto.direction)<MOTOR_STOP)?MOTOR_STOP:moto.speed-moto.direction);
+			analogWrite(MLREVERSE,MOTOR_STOP);
+			analogWrite(MRREVERSE,((int)(moto.speed)-(int)(moto.direction) < MOTOR_STOP) ? -(moto.speed-moto.direction) : MOTOR_STOP);
 		}
   }
   else{
-  		analogWrite(mrforward,moto.speed);
-		analogWrite(mlforward,moto.speed);
-		analogWrite(mrreverse,MOTOR_STOP);
-  		analogWrite(mlreverse,MOTOR_STOP);
+  		analogWrite(MRFORWARD,moto.speed);
+		analogWrite(MLFORWARD,moto.speed);
+		analogWrite(MRREVERSE,MOTOR_STOP);
+  		analogWrite(MLREVERSE,MOTOR_STOP);
   }
 } // end of set_motors
 
