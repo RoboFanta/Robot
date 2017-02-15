@@ -1,15 +1,14 @@
-int maxspeed = 250; //Wert von 0 bis 255
-int softturn = 100; //Wert von 0 bis 255
-int hardturn = 150;   //Wert von 25 bis 255
-int dauerhardturn = 0; //Wert zB. 100, 0 bis 1000
+int maxspeed = 150; //Wert von 0 bis 255
+int softturn =  40; //Wert von 0 bis 255
+int hardturn = 80;   //Wert von 25 bis 255
+float hardturnfaktor = 2;
 
-int approxspd1 = 150; //Speed zwischen 15cm und 8cm Entfernung
-int approxspd2 = 110; //Speed zwischen 8cm und 4cm Entfernung
-int approxspd3 = 80; //Speed <4cm Entfernung
+int approxspd = 150;
 int approxsoftturn = 100; //
 
-int ruecksetzdelay = 500; //Wie lange soll er nach dem Grabben zurückfahren (Speed = approxspd1)
-int drehzyklus = 50; //Optimierung des Drehzyklus ab dem Momnt, in dem alle hinteren Sensoren "0" lesen
+int ruecksetzspeed = 150;
+int ruecksetzdelay = 2000; //Wie lange soll er nach dem Grabben zurückfahren (Speed = approxspd1)
+int drehzyklus = 200; //Optimierung des Drehzyklus ab dem Momnt, in dem alle hinteren Sensoren "0" lesen
 
 
 
@@ -37,7 +36,7 @@ int hireval = 0;                                //HINTERE SENSORREIHE
 
 int ustr = 2; //DIG WRITE
 int usec = 12; //DIG READ
-long usval = 0;  
+long usval = 0;
 int distance = 0;                               //ULTRASCHALL
 
 int grsensor = 4; //ANALOG TO DIG READ
@@ -80,7 +79,7 @@ void setup() {
 
   pinMode(ustr,OUTPUT);
   pinMode(usec,INPUT);
-  
+
   pinMode(grsensor, INPUT);
   servo.attach(servopin);
 
@@ -94,17 +93,13 @@ void setup() {
 }
 
 void loop() {
-  
+
   while (startval == 1){
     startval = digitalRead(start);
     delay(50);
-     servo.write(138);
-  delay(300);
-  servo.write(43);
-  delay(500);
   }
- 
-  
+
+
 vogalival = digitalRead(vogali);                                    //lese Sensoren aus...
 volival = digitalRead(voli);
 vomival = digitalRead(vomi);
@@ -118,6 +113,10 @@ delayMicroseconds(10);
 digitalWrite(ustr,LOW);
 usval = pulseIn(usec,HIGH);
 distance = (usval/2)/29;
+delay(50);
+if ((distance > 25)||(distance < 2)){
+  distance = 25;
+}
 
 if  ((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)){
   geradeaus();
@@ -156,10 +155,11 @@ else if ((vogalival == 0)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(voga
 else {
   stopp();
 }
-if (distance < 20){
-  grabber();
+
+
+if (distance < 25){
+  //grabber();
 }
-delay(50);
 }
 
 void stopp() {
@@ -191,221 +191,36 @@ void leichtrechts() {
 }
 
 void starklinks() {
-  analogWrite(molipl, (280-hardturn));
+  analogWrite(molipl, (255-hardturn));
   digitalWrite(molimi, HIGH);
-  analogWrite(morepl, hardturn);
+  analogWrite(morepl, (hardturn*hardturnfaktor));
   digitalWrite(moremi, LOW);
-  delay(dauerhardturn);
 }
 
 void starkrechts() {
-  analogWrite(molipl, hardturn);
+  analogWrite(molipl, (hardturn*hardturnfaktor));
   digitalWrite(molimi, LOW);
-  analogWrite(morepl, (280-hardturn));
+  analogWrite(morepl, (255-hardturn));
   digitalWrite(moremi, HIGH);
-  delay(dauerhardturn);
 }
 
-void unterbrechung() {
-  analogWrite(molipl, 255);
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, 255);
-  digitalWrite(moremi, LOW);
+void ruecksetzen(){
+  analogWrite(molipl, (255-ruecksetzspeed));
+  digitalWrite(molimi, HIGH);
+  analogWrite(morepl, (255-ruecksetzspeed));
+  digitalWrite(moremi, HIGH);
 }
-
 void grabber() {
-  
-  grsensorval = digitalRead(grsensor);
-  if (grsensorval == 1){
-    drop();
-  }
-  
-  while (grsensor == 0){
-    servo.write(138);
-    
-digitalWrite(ustr,LOW);
-delayMicroseconds(2);
-digitalWrite(ustr,HIGH);
-delayMicroseconds(10);
-digitalWrite(ustr,LOW);
-usval = pulseIn(usec,HIGH);
-distance = (usval/2)/29;
-delay(40);
-
-vogalival = digitalRead(vogali);
-volival = digitalRead(voli);
-vomival = digitalRead(vomi);
-voreval = digitalRead(vore);
-vogareval = digitalRead(vogare);  
-
-grsensorval = digitalRead(grsensor);
-  
-  while (distance > 7){
-if  ((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)){
-  analogWrite(molipl, approxspd1);
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, approxspd1);
-  digitalWrite(moremi, LOW);
-}
-else if ((vogalival == 1)&&(volival == 1)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)){
-  analogWrite(molipl, approxspd1);
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, (approxspd1-approxsoftturn));
-  digitalWrite(moremi, LOW);
-}
-else if ((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 1)&&(vogareval == 1)){
-  analogWrite(molipl, (approxspd1-approxsoftturn));
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, approxspd1);
-  digitalWrite(moremi, LOW);
-}
-else if (((vogalival == 1)&&(volival == 1)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 0))
-        ||((vogalival == 1)&&(volival == 1)&&(vomival == 1)&&(voreval == 0)&&(vogareval == 0))
-        ||((vogalival == 1)&&(volival == 1)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 0))
-        ||((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 0))){
-  starkrechts();
-  analogWrite(molipl, approxspd1);
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, (0));
-  digitalWrite(moremi, LOW);
-}
-else if (((vogalival == 0)&&(volival == 1)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 1))
-        ||((vogalival == 0)&&(volival == 0)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 1))
-        ||((vogalival == 0)&&(volival == 0)&&(vomival == 0)&&(voreval == 1)&&(vogareval == 1))
-        ||((vogalival == 0)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)))  {
-  analogWrite(molipl, (0));
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, approxspd1);
-  digitalWrite(moremi, LOW);
-}
-digitalWrite(ustr,LOW);
-delayMicroseconds(2);
-digitalWrite(ustr,HIGH);
-delayMicroseconds(10);
-digitalWrite(ustr,LOW);
-usval = pulseIn(usec,HIGH);
-distance = (usval/2)/29;
-
-vogalival = digitalRead(vogali);
-volival = digitalRead(voli);
-vomival = digitalRead(vomi);
-voreval = digitalRead(vore);
-vogareval = digitalRead(vogare); 
-  }
-  while (distance > 3){
-if  ((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)){
-  analogWrite(molipl, approxspd2);
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, approxspd2);
-  digitalWrite(moremi, LOW);
-}
-else if ((vogalival == 1)&&(volival == 1)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)){
-  analogWrite(molipl, approxspd2);
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, (approxspd2-approxsoftturn/approxspd1*approxspd2));
-  digitalWrite(moremi, LOW);
-}
-else if ((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 1)&&(vogareval == 1)){
-  analogWrite(molipl, (approxspd2-approxsoftturn/approxspd1*approxspd2));
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, approxspd2);
-  digitalWrite(moremi, LOW);
-}
-else if (((vogalival == 1)&&(volival == 1)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 0))
-        ||((vogalival == 1)&&(volival == 1)&&(vomival == 1)&&(voreval == 0)&&(vogareval == 0))
-        ||((vogalival == 1)&&(volival == 1)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 0))
-        ||((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 0))){
-  starkrechts();
-  analogWrite(molipl, approxspd2);
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, (0));
-  digitalWrite(moremi, LOW);
-}
-else if (((vogalival == 0)&&(volival == 1)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 1))
-        ||((vogalival == 0)&&(volival == 0)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 1))
-        ||((vogalival == 0)&&(volival == 0)&&(vomival == 0)&&(voreval == 1)&&(vogareval == 1))
-        ||((vogalival == 0)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)))  {
-  analogWrite(molipl, (0));
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, approxspd2);
-  digitalWrite(moremi, LOW);
-}
-digitalWrite(ustr,LOW);
-delayMicroseconds(2);
-digitalWrite(ustr,HIGH);
-delayMicroseconds(10);
-digitalWrite(ustr,LOW);
-usval = pulseIn(usec,HIGH);
-distance = (usval/2)/29;
-
-vogalival = digitalRead(vogali);
-volival = digitalRead(voli);
-vomival = digitalRead(vomi);
-voreval = digitalRead(vore);
-vogareval = digitalRead(vogare); 
-  }
-  while ((distance < 4)&&(grsensor == 0)){
-if  ((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)){
-  analogWrite(molipl, approxspd3);
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, approxspd3);
-  digitalWrite(moremi, LOW);
-}
-else if ((vogalival == 1)&&(volival == 1)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)){
-  analogWrite(molipl, approxspd3);
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, (approxspd3-approxsoftturn/approxspd1*approxspd3));
-  digitalWrite(moremi, LOW);
-}
-else if ((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 1)&&(vogareval == 1)){
-  analogWrite(molipl, (approxspd3-approxsoftturn/approxspd1*approxspd3));
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, approxspd3);
-  digitalWrite(moremi, LOW);
-}
-else if (((vogalival == 1)&&(volival == 1)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 0))
-        ||((vogalival == 1)&&(volival == 1)&&(vomival == 1)&&(voreval == 0)&&(vogareval == 0))
-        ||((vogalival == 1)&&(volival == 1)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 0))
-        ||((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 0))){
-  starkrechts();
-  analogWrite(molipl, approxspd3);
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, (0));
-  digitalWrite(moremi, LOW);
-}
-else if (((vogalival == 0)&&(volival == 1)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 1))
-        ||((vogalival == 0)&&(volival == 0)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 1))
-        ||((vogalival == 0)&&(volival == 0)&&(vomival == 0)&&(voreval == 1)&&(vogareval == 1))
-        ||((vogalival == 0)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)))  {
-  analogWrite(molipl, (0));
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, approxspd3);
-  digitalWrite(moremi, LOW);
-} 
-vogalival = digitalRead(vogali);
-volival = digitalRead(voli);
-vomival = digitalRead(vomi);
-voreval = digitalRead(vore);
-vogareval = digitalRead(vogare); 
-
-distance = digitalRead(grsensor);
-  }
-  }
-  
-if (grsensor == 1){
-  servo.write(43);
+  stopp();
+  delay(5000);
+  ruecksetzen();
   delay(1000);
-  wende();
 }
-}
-
-
-
 
 void wende(){
-  analogWrite(molipl, approxspd1);
+  analogWrite(molipl, approxspd);
   digitalWrite(molimi, HIGH);
-  analogWrite(morepl, approxspd1);
+  analogWrite(morepl, approxspd);
   digitalWrite(moremi, HIGH);
   delay(ruecksetzdelay);
 
@@ -414,21 +229,21 @@ himival = digitalRead(himi);
 hireval = digitalRead(hire);
 
 while ((hili == 1)&&(himi == 0)&&(hire == 1)){
-  analogWrite(molipl, (approxspd1));
+  analogWrite(molipl, (approxspd));
   digitalWrite(molimi, LOW);
-  analogWrite(morepl, (255-approxspd1));
+  analogWrite(morepl, (255-approxspd));
   digitalWrite(moremi, HIGH);
-  
+
 hilival = digitalRead(hili);
 himival = digitalRead(himi);
 hireval = digitalRead(hire);
 }
 while ((hili == 0)&&(himi == 0)&&(hire == 0)){
-  analogWrite(molipl, (approxspd1));
+  analogWrite(molipl, (approxspd));
   digitalWrite(molimi, LOW);
-  analogWrite(morepl, (255-approxspd1));
+  analogWrite(morepl, (255-approxspd));
   digitalWrite(moremi, HIGH);
-  
+
 hilival = digitalRead(hili);
 himival = digitalRead(himi);
 hireval = digitalRead(hire);
@@ -439,131 +254,130 @@ delay(drehzyklus);
 
 
 void drop(){
-  
-digitalWrite(ustr,LOW);
-delayMicroseconds(2);
-digitalWrite(ustr,HIGH);
-delayMicroseconds(10);
-digitalWrite(ustr,LOW);
-usval = pulseIn(usec,HIGH);
-distance = (usval/2)/29;
-delay(50);
 
-vogalival = digitalRead(vogali);
-volival = digitalRead(voli);
-vomival = digitalRead(vomi);
-voreval = digitalRead(vore);
-vogareval = digitalRead(vogare);  
-
-grsensorval = digitalRead(grsensor);
-  
-  while (distance > 7){
-if  ((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)){
-  analogWrite(molipl, approxspd1);
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, approxspd1);
-  digitalWrite(moremi, LOW);
-}
-else if ((vogalival == 1)&&(volival == 1)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)){
-  analogWrite(molipl, approxspd1);
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, (approxspd1-approxsoftturn));
-  digitalWrite(moremi, LOW);
-}
-else if ((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 1)&&(vogareval == 1)){
-  analogWrite(molipl, (approxspd1-approxsoftturn));
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, approxspd1);
-  digitalWrite(moremi, LOW);
-}
-else if (((vogalival == 1)&&(volival == 1)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 0))
-        ||((vogalival == 1)&&(volival == 1)&&(vomival == 1)&&(voreval == 0)&&(vogareval == 0))
-        ||((vogalival == 1)&&(volival == 1)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 0))
-        ||((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 0))){
-  starkrechts();
-  analogWrite(molipl, approxspd1);
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, (0));
-  digitalWrite(moremi, LOW);
-}
-else if (((vogalival == 0)&&(volival == 1)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 1))
-        ||((vogalival == 0)&&(volival == 0)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 1))
-        ||((vogalival == 0)&&(volival == 0)&&(vomival == 0)&&(voreval == 1)&&(vogareval == 1))
-        ||((vogalival == 0)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)))  {
-  analogWrite(molipl, (0));
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, approxspd1);
-  digitalWrite(moremi, LOW);
-}
-digitalWrite(ustr,LOW);
-delayMicroseconds(2);
-digitalWrite(ustr,HIGH);
-delayMicroseconds(10);
-digitalWrite(ustr,LOW);
-usval = pulseIn(usec,HIGH);
-distance = (usval/2)/29;
-delay(40);
-
-vogalival = digitalRead(vogali);
-volival = digitalRead(voli);
-vomival = digitalRead(vomi);
-voreval = digitalRead(vore);
-vogareval = digitalRead(vogare); 
-  }
-  while (distance > 3){
-if  ((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)){
-  analogWrite(molipl, approxspd2);
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, approxspd2);
-  digitalWrite(moremi, LOW);
-}
-else if ((vogalival == 1)&&(volival == 1)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)){
-  analogWrite(molipl, approxspd2);
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, (approxspd2-approxsoftturn/approxspd1*approxspd2));
-  digitalWrite(moremi, LOW);
-}
-else if ((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 1)&&(vogareval == 1)){
-  analogWrite(molipl, (approxspd2-approxsoftturn/approxspd1*approxspd2));
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, approxspd2);
-  digitalWrite(moremi, LOW);
-}
-else if (((vogalival == 1)&&(volival == 1)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 0))
-        ||((vogalival == 1)&&(volival == 1)&&(vomival == 1)&&(voreval == 0)&&(vogareval == 0))
-        ||((vogalival == 1)&&(volival == 1)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 0))
-        ||((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 0))){
-  starkrechts();
-  analogWrite(molipl, approxspd2);
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, (0));
-  digitalWrite(moremi, LOW);
-}
-else if (((vogalival == 0)&&(volival == 1)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 1))
-        ||((vogalival == 0)&&(volival == 0)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 1))
-        ||((vogalival == 0)&&(volival == 0)&&(vomival == 0)&&(voreval == 1)&&(vogareval == 1))
-        ||((vogalival == 0)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)))  {
-  analogWrite(molipl, (0));
-  digitalWrite(molimi, LOW);
-  analogWrite(morepl, approxspd2);
-  digitalWrite(moremi, LOW);
-}
-digitalWrite(ustr,LOW);
-delayMicroseconds(2);
-digitalWrite(ustr,HIGH);
-delayMicroseconds(10);
-digitalWrite(ustr,LOW);
-usval = pulseIn(usec,HIGH);
-distance = (usval/2)/29;
-
-vogalival = digitalRead(vogali);
-volival = digitalRead(voli);
-vomival = digitalRead(vomi);
-voreval = digitalRead(vore);
-vogareval = digitalRead(vogare); 
-  }
-  if (distance < 4){
-    servo.write(138);
-
-}
+//digitalWrite(ustr,LOW);
+//delayMicroseconds(2);
+//digitalWrite(ustr,HIGH);
+//delayMicroseconds(10);
+//digitalWrite(ustr,LOW);
+//usval = pulseIn(usec,HIGH);
+//distance = (usval/2)/29;
+//delay(50);
+//
+//vogalival = digitalRead(vogali);
+//volival = digitalRead(voli);
+//vomival = digitalRead(vomi);
+//voreval = digitalRead(vore);
+//vogareval = digitalRead(vogare);
+//
+//grsensorval = digitalRead(grsensor);
+//
+//  while (distance > 7){
+//if  ((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)){
+//  analogWrite(molipl, approxspd1);
+//  digitalWrite(molimi, LOW);
+//  analogWrite(morepl, approxspd1);
+//  digitalWrite(moremi, LOW);
+//}
+//else if ((vogalival == 1)&&(volival == 1)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)){
+//  analogWrite(molipl, approxspd1);
+//  digitalWrite(molimi, LOW);
+//  analogWrite(morepl, (approxspd1-approxsoftturn));
+//  digitalWrite(moremi, LOW);
+//}
+//else if ((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 1)&&(vogareval == 1)){
+//  analogWrite(molipl, (approxspd1-approxsoftturn));
+//  digitalWrite(molimi, LOW);
+//  analogWrite(morepl, approxspd1);
+//  digitalWrite(moremi, LOW);
+//}
+//else if (((vogalival == 1)&&(volival == 1)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 0))
+//        ||((vogalival == 1)&&(volival == 1)&&(vomival == 1)&&(voreval == 0)&&(vogareval == 0))
+//        ||((vogalival == 1)&&(volival == 1)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 0))
+//        ||((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 0))){
+//  analogWrite(molipl, approxspd1);
+//  digitalWrite(molimi, LOW);
+//  analogWrite(morepl, (0));
+//  digitalWrite(moremi, LOW);
+//}
+//else if (((vogalival == 0)&&(volival == 1)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 1))
+//        ||((vogalival == 0)&&(volival == 0)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 1))
+//        ||((vogalival == 0)&&(volival == 0)&&(vomival == 0)&&(voreval == 1)&&(vogareval == 1))
+//        ||((vogalival == 0)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)))  {
+//  analogWrite(molipl, (0));
+//  digitalWrite(molimi, LOW);
+//  analogWrite(morepl, approxspd1);
+//  digitalWrite(moremi, LOW);
+//}
+//digitalWrite(ustr,LOW);
+//delayMicroseconds(2);
+//digitalWrite(ustr,HIGH);
+//delayMicroseconds(10);
+//digitalWrite(ustr,LOW);
+//usval = pulseIn(usec,HIGH);
+//distance = (usval/2)/29;
+//delay(40);
+//
+//vogalival = digitalRead(vogali);
+//volival = digitalRead(voli);
+//vomival = digitalRead(vomi);
+//voreval = digitalRead(vore);
+//vogareval = digitalRead(vogare);
+//  }
+//  while (distance > 3){
+//if  ((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)){
+//  analogWrite(molipl, approxspd2);
+//  digitalWrite(molimi, LOW);
+//  analogWrite(morepl, approxspd2);
+//  digitalWrite(moremi, LOW);
+//}
+//else if ((vogalival == 1)&&(volival == 1)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)){
+//  analogWrite(molipl, approxspd2);
+//  digitalWrite(molimi, LOW);
+//  analogWrite(morepl, (approxspd2-approxsoftturn/approxspd1*approxspd2));
+//  digitalWrite(moremi, LOW);
+//}
+//else if ((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 1)&&(vogareval == 1)){
+//  analogWrite(molipl, (approxspd2-approxsoftturn/approxspd1*approxspd2));
+//  digitalWrite(molimi, LOW);
+//  analogWrite(morepl, approxspd2);
+//  digitalWrite(moremi, LOW);
+//}
+//else if (((vogalival == 1)&&(volival == 1)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 0))
+//        ||((vogalival == 1)&&(volival == 1)&&(vomival == 1)&&(voreval == 0)&&(vogareval == 0))
+//        ||((vogalival == 1)&&(volival == 1)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 0))
+//        ||((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 0))){
+//  analogWrite(molipl, approxspd2);
+//  digitalWrite(molimi, LOW);
+//  analogWrite(morepl, (0));
+//  digitalWrite(moremi, LOW);
+//}
+//else if (((vogalival == 0)&&(volival == 1)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 1))
+//        ||((vogalival == 0)&&(volival == 0)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 1))
+//        ||((vogalival == 0)&&(volival == 0)&&(vomival == 0)&&(voreval == 1)&&(vogareval == 1))
+//        ||((vogalival == 0)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)))  {
+//  analogWrite(molipl, (0));
+//  digitalWrite(molimi, LOW);
+//  analogWrite(morepl, approxspd2);
+//  digitalWrite(moremi, LOW);
+//}
+//digitalWrite(ustr,LOW);
+//delayMicroseconds(2);
+//digitalWrite(ustr,HIGH);
+//delayMicroseconds(10);
+//digitalWrite(ustr,LOW);
+//usval = pulseIn(usec,HIGH);
+//distance = (usval/2)/29;
+//
+//vogalival = digitalRead(vogali);
+//volival = digitalRead(voli);
+//vomival = digitalRead(vomi);
+//voreval = digitalRead(vore);
+//vogareval = digitalRead(vogare);
+//  }
+//  if (distance < 4){
+//    servo.write(138);
+//    delay(500);
+//wende();
+//}
 }
