@@ -56,7 +56,7 @@ License is GPL-v3.
 
 
 #include <NewPing.h>
-#include <Servo.h>
+#include <ervo.h>
 
 #define DEBUG 1
 // #define DEBUG 0
@@ -121,7 +121,7 @@ typedef void (*void_ptr)();
 #define lback_length 3
 
 #define SPEED_VSLOW   30
-#define SPEED_SLOW    65 
+#define SPEED_SLOW    65
 #define SPEED_MIDDLE  120
 #define SPEED_FAST    160
 #define SPEED_VFAST   200
@@ -327,6 +327,7 @@ void loop() {         // Main Control loop
   current_action(); // TODO: use @Victors method.
 
   // set_motors();
+  myServo.write(pos);
 
   ++iteration;
 
@@ -681,14 +682,11 @@ void close_in() {             // closing in on the box
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void close_hatch() {        // actually Grabbing the ball. verifying with a sensor?
   /////////////////////////////////////////////////////////////////////////////////////////////////
-  
+
   stopp();
 
-  pos = SERVO_CLOSE;
-  myServo.write(pos);
-  // current_action = &servo_moving;
-
-  current_action = states[++own_state];
+  newPos = SERVO_CLOSE;
+  current_action = &servo_moving;
 
 } // end of close_hatch
 
@@ -700,11 +698,8 @@ void open_hatch() {        // actually Grabbing the ball. verifying with a senso
 
   stopp();
 
-  pos = SERVO_OPEN;
-  myServo.write(pos);
-  // current_action = &servo_moving;
-
-  current_action = states[++own_state];
+  newPos = SERVO_OPEN;
+  current_action = &servo_moving;
 
 } // end of open_hatch
 
@@ -742,11 +737,11 @@ void init_prog() { // initializing (round 2)
 
 //   OnFwd(OUT_R, 150);
 //   OnFwd(OUT_L, 150);
-// 
+//
 //   delay(500);
-//   
+//
 //   delay(500);
-// 
+//
 //   OFF(OUT_R);
 //   OFF(OUT_L);
 
@@ -765,39 +760,36 @@ void init_prog() { // initializing (round 2)
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void turn() {     // Turning the robot, Software version
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-  if (turnstate == 0) {
-    readLight = true;
-    readSecond = true;
-    askForDist = false;
-    analogWrite(OUT_L, (255-turnspeed));
-    digitalWrite(motor_left_reverse, HIGH);
-    analogWrite(OUT_R, (turnspeed));
-    digitalWrite(motor_right_reverse, LOW);
-    delay(50);
-    while (digitalRead(lmain[4]))
-      delayMicroseconds(50);
-    while (!digitalRead(lmain[4]))
-      delayMicroseconds(50);
-    analogWrite(OUT_L, (255-turnspeed - 20));
-    digitalWrite(motor_left_reverse, HIGH);
-    analogWrite(OUT_R, (turnspeed - 20));
-    digitalWrite(motor_right_reverse, LOW);
-    while (digitalRead(lmain[0]))
-      delayMicroseconds(50);
-    analogWrite(OUT_L, (255-turnspeed - 40));
-    digitalWrite(motor_left_reverse, HIGH);
-    analogWrite(OUT_R, (turnspeed - 40));
-    digitalWrite(motor_right_reverse, LOW);
-    while (digitalRead(lmain[1]))
-      delayMicroseconds(50);
-    while (digitalRead(lmain[2]))
-      delayMicroseconds(50);
-    analogWrite(OUT_L, 0);
-    digitalWrite(motor_left_reverse, LOW);
-    analogWrite(OUT_R, 0);
-    digitalWrite(motor_right_reverse, LOW);
-    turnstate = 2;
-  }
+  readLight = true;
+  readSecond = true;
+  askForDist = false;
+  analogWrite(OUT_L, (255-turnspeed));
+  digitalWrite(motor_left_reverse, HIGH);
+  analogWrite(OUT_R, (turnspeed));
+  digitalWrite(motor_right_reverse, LOW);
+  delay(50);
+  while (digitalRead(lmain[4]))
+    delayMicroseconds(50);
+  while (!digitalRead(lmain[4]))
+    delayMicroseconds(50);
+  analogWrite(OUT_L, (255-turnspeed - 20));
+  digitalWrite(motor_left_reverse, HIGH);
+  analogWrite(OUT_R, (turnspeed - 20));
+  digitalWrite(motor_right_reverse, LOW);
+  while (digitalRead(lmain[0]))
+    delayMicroseconds(50);
+  analogWrite(OUT_L, (255-turnspeed - 40));
+  digitalWrite(motor_left_reverse, HIGH);
+  analogWrite(OUT_R, (turnspeed - 40));
+  digitalWrite(motor_right_reverse, LOW);
+  while (digitalRead(lmain[1]))
+    delayMicroseconds(50);
+  while (digitalRead(lmain[2]))
+    delayMicroseconds(50);
+  analogWrite(OUT_L, 0);
+  digitalWrite(motor_left_reverse, LOW);
+  analogWrite(OUT_R, 0);
+  digitalWrite(motor_right_reverse, LOW);
 
   distance = 0;
   old_distance = 25;

@@ -1,10 +1,13 @@
-int maxspeed = 150; //Wert von 0 bis 255
-int softturn =  40; //Wert von 0 bis 255
-int hardturn = 80;   //Wert von 25 bis 255
-float hardturnfaktor = 2;
+#include <NewPing.h>
 
-int approxspd = 150;
-int approxsoftturn = 100; //
+int maxspeed = 150; //Wert von 0 bis 255
+int softturn = 40; //Wert von 0 bis 255
+int hardturn = 40;   //Wert von 25 bis 255
+float hardturnfaktor = 3;
+
+int turnspeed = 150;
+
+int approxspeed = 150;
 
 int ruecksetzspeed = 150;
 int ruecksetzdelay = 2000; //Wie lange soll er nach dem Grabben zurückfahren (Speed = approxspd1)
@@ -37,7 +40,8 @@ int hireval = 0;                                //HINTERE SENSORREIHE
 int ustr = 2; //DIG WRITE
 int usec = 12; //DIG READ
 long usval = 0;
-int distance = 0;                               //ULTRASCHALL
+int distance = 30;                              //ULTRASCHALL
+int latest_dist = 30;
 
 int grsensor = 4; //ANALOG TO DIG READ
 int servopin = 11; //DIG WRITE
@@ -52,7 +56,9 @@ int start = 19; //DGITAL WRITE
 int startval = 1;                           //Startknopf
 
 bool hardturnlinks = false;
+bool turnlinks = false;
 
+NewPing sonar(ustr,usec,25);
 
 #include <Servo.h>
 
@@ -93,7 +99,7 @@ void setup() {
 }
 
 void loop() {
-
+  servo.write(43);
   while (startval == 1){
     startval = digitalRead(start);
     delay(50);
@@ -106,17 +112,11 @@ vomival = digitalRead(vomi);
 voreval = digitalRead(vore);
 vogareval = digitalRead(vogare);                                      //...und speichere sie ab
 
-digitalWrite(ustr,LOW);
-delayMicroseconds(2);
-digitalWrite(ustr,HIGH);
-delayMicroseconds(10);
-digitalWrite(ustr,LOW);
-usval = pulseIn(usec,HIGH);
-distance = (usval/2)/29;
-delay(50);
-if ((distance > 25)||(distance < 2)){
-  distance = 25;
-}
+
+distance = sonar.ping_cm();
+
+latest_dist = distance ? distance : latest_dist;
+
 
 if  ((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)){
   geradeaus();
@@ -157,8 +157,8 @@ else {
 }
 
 
-if (distance < 25){
-  //grabber();
+if (distance < 15){
+  grabber();
 }
 }
 
@@ -204,23 +204,100 @@ void starkrechts() {
   digitalWrite(moremi, HIGH);
 }
 
+void turn() {
+  analogWrite(molipl, (255-turnspeed));
+  digitalWrite(molimi, HIGH);
+  analogWrite(morepl, (turnspeed));
+  digitalWrite(moremi, LOW);
+  delay(50);
+  while (digitalRead(vogare))
+    delayMicroseconds(50);
+  while (!digitalRead(vogare))
+    delayMicroseconds(50);
+  analogWrite(molipl, (255-turnspeed - 20));
+  digitalWrite(molimi, HIGH);
+  analogWrite(morepl, (turnspeed - 20));
+  digitalWrite(moremi, LOW);
+  while (digitalRead(voli))
+    delayMicroseconds(50);
+  analogWrite(molipl, (255-turnspeed - 40));
+  digitalWrite(molimi, HIGH);
+  analogWrite(morepl, (turnspeed - 40));
+  digitalWrite(moremi, LOW);
+  while (digitalRead(vomi))
+    delayMicroseconds(50);
+  while (digitalRead(vomi))
+    delayMicroseconds(50);
+  analogWrite(molipl, 0);
+  digitalWrite(molimi, LOW);
+  analogWrite(morepl, 0);
+  digitalWrite(moremi, LOW);
+}
+
 void ruecksetzen(){
   analogWrite(molipl, (255-ruecksetzspeed));
   digitalWrite(molimi, HIGH);
   analogWrite(morepl, (255-ruecksetzspeed));
   digitalWrite(moremi, HIGH);
 }
+
 void grabber() {
-  stopp();
-  delay(5000);
-  ruecksetzen();
-  delay(1000);
+ if (grsensorval == 1){
+  drop();
+ }
+ else {
+  while (grsensorval == 0) {
+ servo.write(140);
+  if  ((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)){
+  analogWrite(molipl, (approxspeed));
+  digitalWrite(molimi, LOW);
+  analogWrite(morepl, (approxspeed));
+  digitalWrite(moremi, LOW);
+}
+else if ((vogalival == 1)&&(volival == 1)&&(vomival == 1)&&(voreval == 1)&&(vogareval == 1)){
+  analogWrite(molipl, (0));
+  digitalWrite(molimi, LOW);
+  analogWrite(morepl, (0));
+  digitalWrite(moremi, LOW);
+ }
+ else if ((vogalival == 1)&&(volival == 1)&&(vomival == 0)&&(voreval == 0)&&(vogareval == 1)){
+  analogWrite(molipl, (approxspeed));
+  digitalWrite(molimi, LOW);
+  analogWrite(morepl, (approxspeed/2));
+  digitalWrite(moremi, LOW);
+  turnlinks =  false;
+  }
+  else if ((vogalival == 1)&&(volival == 0)&&(vomival == 0)&&(voreval == 1)&&(vogareval == 1)){
+  analogWrite(molipl, (approxspeed/2));
+  digitalWrite(molimi, LOW);
+  analogWrite(morepl, (approxspeed));
+  digitalWrite(moremi, LOW);
+  turnlinks = true;
+}
+else {
+  if (turnlinks = true){
+      analogWrite(molipl, (approxspeed));
+  digitalWrite(molimi, LOW);
+  analogWrite(morepl, (approxspeed/2));
+  digitalWrite(moremi, LOW);
+  }
+  else {
+      analogWrite(molipl, (approxspeed/2));
+  digitalWrite(molimi, LOW);
+  analogWrite(morepl, (approxspeed));
+  digitalWrite(moremi, LOW);
+  }
+}
+}
+servo.write(43); //////////////////////////////////////////////////////////////////////////////////////////////////////
+ stopp();
+ }
 }
 
 void wende(){
-  analogWrite(molipl, approxspd);
+  analogWrite(molipl, approxspeed);
   digitalWrite(molimi, HIGH);
-  analogWrite(morepl, approxspd);
+  analogWrite(morepl, approxspeed);
   digitalWrite(moremi, HIGH);
   delay(ruecksetzdelay);
 
@@ -229,9 +306,9 @@ himival = digitalRead(himi);
 hireval = digitalRead(hire);
 
 while ((hili == 1)&&(himi == 0)&&(hire == 1)){
-  analogWrite(molipl, (approxspd));
+  analogWrite(molipl, (approxspeed));
   digitalWrite(molimi, LOW);
-  analogWrite(morepl, (255-approxspd));
+  analogWrite(morepl, (255-approxspeed));
   digitalWrite(moremi, HIGH);
 
 hilival = digitalRead(hili);
@@ -239,9 +316,9 @@ himival = digitalRead(himi);
 hireval = digitalRead(hire);
 }
 while ((hili == 0)&&(himi == 0)&&(hire == 0)){
-  analogWrite(molipl, (approxspd));
+  analogWrite(molipl, (approxspeed));
   digitalWrite(molimi, LOW);
-  analogWrite(morepl, (255-approxspd));
+  analogWrite(morepl, (255-approxspeed));
   digitalWrite(moremi, HIGH);
 
 hilival = digitalRead(hili);
